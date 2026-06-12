@@ -689,9 +689,13 @@
       } else {
         const endTime    = new Date().toISOString();
         const startTime  = activeSleepStart;
-        const durationHrs = (new Date(endTime) - new Date(startTime)) / 3600000;
+        
+        // Розраховуємо тривалість у мілісекундах
+        const durationMs = new Date(endTime) - new Date(startTime);
+        const durationHrs = durationMs / 3600000;
 
-        if (durationHrs > 0) {
+        // Зберігаємо сесію лише якщо вона тривала не менше 1 хвилини (60 000 мс)
+        if (durationMs >= 60000) {
           const id = Date.now().toString();
           const newRecord = {
             id,
