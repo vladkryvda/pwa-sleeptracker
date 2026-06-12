@@ -260,7 +260,7 @@
       font-weight: 500;
     }
 
-    /* Swipe-to-Delete History List with Liquid Glass Theme */
+    /* Swipe-to-Delete History */
     .history-section-title {
       font-size: 10px;
       font-weight: 600;
@@ -276,16 +276,15 @@
       padding-right: 2px;
     }
 
-    /* Приховати скроллбар у WebKit */
     .full-history-list::-webkit-scrollbar {
       display: none;
     }
 
     .swipe-container {
       position: relative;
-      overflow: hidden;
+      overflow: hidden; /* Маскує червону кнопку поза контейнером */
       margin-bottom: 12px;
-      border-radius: 18px; /* Заокруглення як у решти елементів */
+      border-radius: 18px;
       height: 64px;
       background-color: transparent;
     }
@@ -296,7 +295,6 @@
       left: 0;
       width: 100%;
       height: 100%;
-      /* Дизайн Glassmorphism аналогічний верхнім панелям */
       background: var(--glass-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
@@ -309,7 +307,6 @@
       z-index: 2;
       box-shadow: inset 0 1px 0 var(--glass-shine);
       transform: translateX(0px);
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .delete-underlay {
@@ -319,13 +316,15 @@
       width: 74px;
       height: 100%;
       background-color: #ff3b30;
-      border-radius: 18px; /* Заокруглені краї кнопки */
+      border-radius: 18px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #ffffff;
       z-index: 1;
       cursor: pointer;
+      /* За замовчуванням зміщена праворуч, щоб її не було видно за прозорою карткою */
+      transform: translateX(74px);
     }
 
     .delete-icon {
@@ -399,8 +398,8 @@
   </div>
 
   <script>
-    // URL вашого розгорнутого Google Apps Script
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwTst8u4J24m-wTAkA-B_3vxodIKkGsW8_41FzTjXoyfB00u1rUekfXzkSupkFHpZhOFA/exec";
+    // Посилання на ваш розгорнутий Google Apps Script веб-додаток
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwoUfsbCHVST8M1O5VLkRbhVIS4RqyPNi268Q3obQ5XG0UMu1j6hnXf-yepJv4NoFSWag/exec";
 
     let sleepData = JSON.parse(localStorage.getItem('sleep_records')) || [];
     let deletedQueue = JSON.parse(localStorage.getItem('sleep_deleted_queue')) || [];
@@ -415,8 +414,11 @@
     let touchStartX = 0;
     let activeSwipeRow = null;
 
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
       checkActiveSleepState();
+      // Спочатку завантажуємо актуальні резервні дані з таблиці (як iCloud),
+      // а потім виконуємо синхронізацію локальних змін
+      await loadDataFromBackup();
       syncData();
       window.addEventListener('resize', resizeCanvas);
     });
@@ -600,16 +602,23 @@
       document.getElementById('screen-stats').classList.remove('active');
     }
 
-    // --- SWIPE-TO-DELETE GESTURES (Змінено напрямок на Справа наліво) ---
+    // --- SWIPE-TO-DELETE GESTURES (Синхронне насування червоного блоку) ---
     function initSwipeGestures() {
       const rows = document.querySelectorAll('.history-row');
       rows.forEach(row => {
+        const underlay = row.parentElement.querySelector('.delete-underlay');
+
         row.addEventListener('touchstart', (e) => {
           touchStartX = e.touches[0].clientX;
           
           if (activeSwipeRow && activeSwipeRow !== row) {
+            const activeUnderlay = activeSwipeRow.parentElement.querySelector('.delete-underlay');
             activeSwipeRow.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
             activeSwipeRow.style.transform = 'translateX(0px)';
+            if (activeUnderlay) {
+              activeUnderlay.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+              activeUnderlay.style.transform = 'translateX(74px)';
+            }
           }
         }, { passive: true });
 
@@ -617,13 +626,21 @@
           const currentX = e.touches[0].clientX;
           const diffX = currentX - touchStartX;
           
-          // Тільки рух вліво (diffX < 0)
           if (diffX < 0) {
             row.style.transition = 'none'; 
-            const translate = Math.max(diffX, -85); // обмежуємо максимальний свайп
+            if (underlay) underlay.style.transition = 'none';
+
+            const translate = Math.max(diffX, -85);
             row.style.transform = `translateX(${translate}px)`;
+            
+            // Червона кнопка рухається паралельно зсуву картки
+            if (underlay) {
+              const underlayTranslate = Math.max(74 + translate, 0);
+              underlay.style.transform = `translateX(${underlayTranslate}px)`;
+            }
           } else {
             row.style.transform = 'translateX(0px)';
+            if (underlay) underlay.style.transform = 'translateX(74px)';
           }
         }, { passive: true });
 
@@ -632,13 +649,15 @@
           const diffX = currentX - touchStartX;
           
           row.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+          if (underlay) underlay.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
           
-          // Поріг для фіксації смітника (-40px)
           if (diffX < -40) {
             row.style.transform = 'translateX(-74px)';
+            if (underlay) underlay.style.transform = 'translateX(0px)';
             activeSwipeRow = row;
           } else {
             row.style.transform = 'translateX(0px)';
+            if (underlay) underlay.style.transform = 'translateX(74px)';
             activeSwipeRow = null;
           }
         });
@@ -706,13 +725,12 @@
 
         fullHistoryContainer.innerHTML += `
           <div class="swipe-container">
-            <div class="delete-underlay" onclick="deleteRecord('${item.id}')">
-              <!-- Білий лаконічний смітник Apple Style -->
+            <div class="delete-underlay" style="transform: translateX(74px);" onclick="deleteRecord('${item.id}')">
               <svg class="delete-icon" viewBox="0 0 24 24">
                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
               </svg>
             </div>
-            <div class="history-row">
+            <div class="history-row" style="transform: translateX(0px);">
               <div>
                 <div class="history-time">${durationStr}</div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight:500;">
@@ -773,8 +791,49 @@
       });
     }
 
+    // --- БЕКАП-ІМПОРТ З GOOGLE ТАБЛИЦІ (iCloud логіка) ---
+    async function loadDataFromBackup() {
+      if (!navigator.onLine || APPS_SCRIPT_URL.includes("ВАШ_ID_СКРИПТА")) {
+        return;
+      }
+
+      try {
+        const response = await fetch(APPS_SCRIPT_URL);
+        if (response.ok) {
+          const remoteData = await response.json();
+          if (Array.isArray(remoteData)) {
+            // Фільтруємо отримані дані хмари, виключаючи ті, які ми щойно локально видалили (але ще не синхронізували)
+            const filteredRemote = remoteData.filter(r => !deletedQueue.includes(r.id));
+            
+            // Отримуємо локальні унікальні записи, які ще не були надіслані до таблиці
+            const unsyncedLocals = sleepData.filter(r => !r.synced);
+            
+            // Перетворюємо дані з хмари на локальний формат зі статусом synced: true
+            const mergedData = filteredRemote.map(r => ({ ...r, synced: true }));
+            
+            // Повертаємо узагальнені несинхронізовані записи на початок списку
+            unsyncedLocals.forEach(localItem => {
+              if (!mergedData.some(remoteItem => remoteItem.id === localItem.id)) {
+                mergedData.unshift(localItem);
+              }
+            });
+
+            // Сортуємо записи за датою
+            mergedData.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+            sleepData = mergedData;
+            localStorage.setItem('sleep_records', JSON.stringify(sleepData));
+            renderStatistics();
+          }
+        }
+      } catch (error) {
+        console.error("Помилка завантаження бекапу:", error);
+      }
+    }
+
+    // --- ЕКСПОРТ ЛОКАЛЬНИХ ЗМІН У GOOGLE ТАБЛИЦЮ ---
     async function syncData() {
-      if (!navigator.onLine || APPS_SCRIPT_URL.includes("AKfycbwTst8u4J24m-wTAkA-B_3vxodIKkGsW8_41FzTjXoyfB00u1rUekfXzkSupkFHpZhOFA")) {
+      if (!navigator.onLine || APPS_SCRIPT_URL.includes("AKfycbwoUfsbCHVST8M1O5VLkRbhVIS4RqyPNi268Q3obQ5XG0UMu1j6hnXf-yepJv4NoFSWag")) {
         return;
       }
 
@@ -798,7 +857,7 @@
           body: JSON.stringify(payload)
         });
 
-        // Маркуємо як синхронізовані лише ті, які успішно надіслано
+        // Позначаємо надіслані логи як синхронізовані
         sleepData = sleepData.map(r => {
           if (unsyncedInserts.some(un => un.id === r.id)) {
             r.synced = true;
@@ -807,6 +866,7 @@
         });
         localStorage.setItem('sleep_records', JSON.stringify(sleepData));
 
+        // Очищаємо чергу видалення у разі успіху
         deletedQueue = deletedQueue.filter(id => !unsyncedDeletes.includes(id));
         localStorage.setItem('sleep_deleted_queue', JSON.stringify(deletedQueue));
 
