@@ -6,8 +6,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sleep Tracker</title>
-  <link rel="manifest" href="manifest.json">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Кастомна іконка 512х512 для робочого столу iPhone -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght=200;300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-color: #ffffff;
@@ -487,11 +490,6 @@
     }
 
     // ─── FULL SYNC FLOW ───────────────────────────────────────────────────────
-    // Логіка:
-    //   1. Спочатку надсилаємо pending changes (insert/delete) до хмари
-    //   2. Потім завантажуємо актуальний стан хмари
-    //   3. Мержимо: хмара є основою, але pending inserts які ще не потрапили —
-    //      додаємо зверху (на випадок race condition)
     async function fullSync() {
       if (!navigator.onLine || isSyncing) return;
       isSyncing = true;
@@ -508,7 +506,6 @@
       } catch (err) {
         console.error('[Sync] Error:', err);
         updateSyncIndicator('error');
-        // Через 3 секунди покажемо реальний стан (може є pending items)
         setTimeout(updateSyncIndicator, 3000);
       } finally {
         isSyncing = false;
@@ -522,8 +519,6 @@
       const inserts = sleepData.filter(r => pendingInserts.includes(r.id));
       const deletes = [...pendingDeletes];
 
-      // mode: 'no-cors' означає що відповідь ми не отримаємо (opaque response),
-      // тому вважаємо успіхом сам факт відправки
       await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -531,7 +526,7 @@
         body: JSON.stringify({ inserts, deletes })
       });
 
-      // Очищаємо pending після успішної відправки
+      // Очищаємо pending після відправки
       pendingInserts = [];
       pendingDeletes = deletes.length > 0
         ? pendingDeletes.filter(id => !deletes.includes(id))
@@ -549,7 +544,6 @@
       const cloudData = await response.json();
       if (!Array.isArray(cloudData)) throw new Error('Unexpected cloud response format');
 
-      // Будуємо Set вже видалених id (щоб не повертати видалені записи з хмари)
       const deletedSet = new Set(pendingDeletes);
 
       // Перетворюємо хмарні записи → локальний формат
@@ -560,21 +554,19 @@
         }
       });
 
-      // Додаємо pending inserts які ще не потрапили в хмару
-      // (можлива race condition: ми тільки-но відправили, але хмара ще не повернула)
+      // Додаємо несинхронізовані локальні записи
       sleepData.forEach(r => {
         if (pendingInserts.includes(r.id) && !cloudMap.has(r.id)) {
           cloudMap.set(r.id, { ...r, synced: false });
         }
       });
 
-      // Збираємо фінальний масив, сортуємо за датою (новіші — перші)
+      // Сортуємо
       sleepData = Array.from(cloudMap.values())
         .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
       localStorage.setItem('sleep_records', JSON.stringify(sleepData));
 
-      // Оновлюємо UI якщо stats відкриті
       if (document.getElementById('screen-stats').classList.contains('active')) {
         renderStatistics();
       }
@@ -691,12 +683,10 @@
 
     function toggleSleep() {
       if (!activeSleepStart) {
-        // → починаємо сон
         activeSleepStart = new Date().toISOString();
         localStorage.setItem('active_sleep_start', activeSleepStart);
         checkActiveSleepState();
       } else {
-        // → завершуємо сон
         const endTime    = new Date().toISOString();
         const startTime  = activeSleepStart;
         const durationHrs = (new Date(endTime) - new Date(startTime)) / 3600000;
@@ -714,7 +704,6 @@
           sleepData.unshift(newRecord);
           localStorage.setItem('sleep_records', JSON.stringify(sleepData));
 
-          // Додаємо до pending inserts
           if (!pendingInserts.includes(id)) pendingInserts.push(id);
           localStorage.setItem('pending_inserts', JSON.stringify(pendingInserts));
           updateSyncIndicator();
@@ -724,7 +713,6 @@
         localStorage.removeItem('active_sleep_start');
         checkActiveSleepState();
 
-        // Спробуємо синхронізувати
         fullSync();
       }
     }
@@ -749,13 +737,10 @@
       sleepData = sleepData.filter(r => r.id !== id);
       localStorage.setItem('sleep_records', JSON.stringify(sleepData));
 
-      // Якщо запис був pending insert — просто прибираємо його звідти,
-      // бо він ще не потрапив в хмару → нічого видаляти там не треба
       if (pendingInserts.includes(id)) {
         pendingInserts = pendingInserts.filter(i => i !== id);
         localStorage.setItem('pending_inserts', JSON.stringify(pendingInserts));
       } else {
-        // Запис вже в хмарі → додаємо до pending deletes
         if (!pendingDeletes.includes(id)) pendingDeletes.push(id);
         localStorage.setItem('pending_deletes', JSON.stringify(pendingDeletes));
       }
@@ -776,14 +761,12 @@
         return;
       }
 
-      // Avg duration
       const avgDuration = sleepData.reduce((a, c) => a + c.duration, 0) / sleepData.length;
       const avgH = Math.floor(avgDuration);
       const avgM = Math.round((avgDuration % 1) * 60);
       document.getElementById('stat-avg-duration').textContent =
         avgH > 0 ? `${avgH}h ${avgM}m` : `${avgM}m`;
 
-      // Avg bedtime
       const totalMin = sleepData.reduce((acc, item) => {
         const s = new Date(item.startTime);
         const h = s.getHours(), m = s.getMinutes();
@@ -797,7 +780,6 @@
 
       renderWeeklyChart();
 
-      // History list
       const container = document.getElementById('full-history');
       container.innerHTML = '';
 
