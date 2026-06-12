@@ -7,9 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sleep Tracker</title>
   
-  <!-- Кастомна іконка 512х512 для робочого столу iPhone -->
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght=200;300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -244,36 +242,61 @@
       flex-direction: column;
       margin-bottom: 20px;
     }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
     .chart-title {
       font-size: 10px;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      margin-bottom: 20px;
     }
+    .chart-nav-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      outline: none;
+      transition: color 0.2s, opacity 0.2s;
+    }
+    .chart-nav-btn:active {
+      opacity: 0.5;
+    }
+    .chart-nav-btn.disabled {
+      opacity: 0.15;
+      pointer-events: none;
+    }
+
     .chart-bars {
       display: flex;
       justify-content: space-between;
-      align-items: stretch; /* Змінено з flex-end на stretch */
+      align-items: stretch; 
       height: 140px;
       padding-bottom: 4px;
     }
-    
     .bar-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
       flex: 1;
-      height: 100%;             /* Додано для заповнення висоти батька */
-      justify-content: flex-end; /* Додано для притискання елементів до низу */
+      height: 100%;             
+      justify-content: flex-end; 
     }
     .bar {
       width: 14px;
       background: rgba(255, 255, 255, 0.1);
       border-radius: 7px;
       height: 0%;
-      transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative;
     }
     .bar.highlight {
@@ -332,7 +355,6 @@
       transform: translateX(0px);
     }
 
-    /* Unsynced badge on history row */
     .history-row.unsynced::after {
       content: '';
       position: absolute;
@@ -371,10 +393,42 @@
       font-size: 16px;
       font-weight: 500;
       letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
     }
     .history-date {
       font-size: 13px;
       color: var(--text-muted);
+    }
+
+    /* --- PURIFIED MONOLITHIC PILLAR OVERLAY (No texts, no buttons) --- */
+    .rating-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .rating-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .pillar-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #pillar-canvas {
+      width: 100%;
+      height: 100%;
     }
   </style>
 </head>
@@ -391,7 +445,6 @@
         </svg>
       </button>
 
-      <!-- Маленька крапка: grey=offline, yellow=syncing, green=synced, red=error -->
       <div id="sync-indicator" class="sync-indicator offline" title="Sync status"></div>
       
       <div id="status-label" class="center-status">Tap to sleep</div>
@@ -424,7 +477,19 @@
       </div>
 
       <div class="glass-panel chart-container">
-        <div class="chart-title">Last 7 Days</div>
+        <div class="chart-header">
+          <button class="chart-nav-btn" onclick="navigateWeek(-1)">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <div id="chart-week-range" class="chart-title">This Week</div>
+          <button class="chart-nav-btn" id="chart-nav-next" onclick="navigateWeek(1)">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        </div>
         <div class="chart-bars" id="chart-bars-container"></div>
       </div>
 
@@ -434,37 +499,57 @@
 
   </div>
 
+  <!-- MONOLITHIC PILLAR RATING OVERLAY (Purified) -->
+  <div id="rating-overlay" class="rating-overlay">
+    <div class="pillar-container">
+      <canvas id="pillar-canvas"></canvas>
+    </div>
+  </div>
+
   <script>
     // ─── CONFIG ───────────────────────────────────────────────────────────────
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwoUfsbCHVST8M1O5VLkRbhVIS4RqyPNi268Q3obQ5XG0UMu1j6hnXf-yepJv4NoFSWag/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbypN-aHpg-5oU2PvcYcHnHKJKtqmddTfx2Jn8LC1zLfONw726-yz269GBq5cX1OCOxAjw/exec";
 
     // ─── STATE ────────────────────────────────────────────────────────────────
     let sleepData        = JSON.parse(localStorage.getItem('sleep_records'))      || [];
-    let pendingInserts   = JSON.parse(localStorage.getItem('pending_inserts'))    || []; // id-шники нових записів які ще не в хмарі
-    let pendingDeletes   = JSON.parse(localStorage.getItem('pending_deletes'))    || []; // id-шники видалених записів які ще треба видалити з хмари
+    let pendingInserts   = JSON.parse(localStorage.getItem('pending_inserts'))    || [];
+    let pendingDeletes   = JSON.parse(localStorage.getItem('pending_deletes'))    || [];
     let activeSleepStart = localStorage.getItem('active_sleep_start')             || null;
+    let tempSleepRecord  = null; 
     let isSyncing        = false;
+    let currentWeekOffset = 0; 
 
     // ─── DOM REFS ─────────────────────────────────────────────────────────────
     const ecgCanvas       = document.getElementById('ecg-canvas');
     const ecgCtx          = ecgCanvas.getContext('2d');
     const syncIndicator   = document.getElementById('sync-indicator');
+    const pillarCanvas    = document.getElementById('pillar-canvas');
+    const pillarCtx      = pillarCanvas.getContext('2d');
 
     let ecgAnimationId = null;
+    let pillarAnimId   = null;
     let waveTimer      = 0;
     let timerInterval  = null;
     let touchStartX    = 0;
     let activeSwipeRow = null;
 
+    // Pillar dynamic states (Continuous progress)
+    let ratingProgress = 0.5; // Стан пальця (від 0.0 до 1.0)
+    let currentProgress = 0.5; // Анімований стан
+    let isDraggingPillar = false;
+
     // ─── INIT ─────────────────────────────────────────────────────────────────
     window.addEventListener('load', async () => {
       checkActiveSleepState();
       updateSyncIndicator();
+      initPillarEvents();
       await fullSync();
-      window.addEventListener('resize', resizeCanvas);
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        resizePillarCanvas();
+      });
     });
 
-    // При поверненні онлайн — одразу синхронізуємо
     window.addEventListener('online', () => {
       updateSyncIndicator();
       fullSync();
@@ -499,12 +584,8 @@
       updateSyncIndicator('syncing');
 
       try {
-        // Крок 1: надіслати pending changes
         await pushPendingChanges();
-
-        // Крок 2: завантажити актуальний стан з хмари і змержити
         await pullFromCloud();
-
         updateSyncIndicator('synced');
       } catch (err) {
         console.error('[Sync] Error:', err);
@@ -515,7 +596,6 @@
       }
     }
 
-    // Надсилаємо локальні зміни до Google Sheets
     async function pushPendingChanges() {
       if (pendingInserts.length === 0 && pendingDeletes.length === 0) return;
 
@@ -529,7 +609,6 @@
         body: JSON.stringify({ inserts, deletes })
       });
 
-      // Очищаємо pending після відправки
       pendingInserts = [];
       pendingDeletes = deletes.length > 0
         ? pendingDeletes.filter(id => !deletes.includes(id))
@@ -539,7 +618,6 @@
       localStorage.setItem('pending_deletes', JSON.stringify(pendingDeletes));
     }
 
-    // Завантажуємо повний список з хмари і мержимо з локальним станом
     async function pullFromCloud() {
       const response = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now());
       if (!response.ok) throw new Error('Cloud fetch failed: ' + response.status);
@@ -549,7 +627,6 @@
 
       const deletedSet = new Set(pendingDeletes);
 
-      // Перетворюємо хмарні записи → локальний формат
       const cloudMap = new Map();
       cloudData.forEach(r => {
         if (!deletedSet.has(r.id)) {
@@ -557,14 +634,12 @@
         }
       });
 
-      // Додаємо несинхронізовані локальні записи
       sleepData.forEach(r => {
         if (pendingInserts.includes(r.id) && !cloudMap.has(r.id)) {
           cloudMap.set(r.id, { ...r, synced: false });
         }
       });
 
-      // Сортуємо
       sleepData = Array.from(cloudMap.values())
         .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
 
@@ -680,7 +755,7 @@
 
     // ─── TOGGLE SLEEP ─────────────────────────────────────────────────────────
     function handleScreenTap(event) {
-      if (event.target.closest('#nav-to-stats-btn')) return;
+      if (event.target.closest('#nav-to-stats-btn') || event.target.closest('#rating-overlay')) return;
       toggleSleep();
     }
 
@@ -693,35 +768,182 @@
         const endTime    = new Date().toISOString();
         const startTime  = activeSleepStart;
         
-        // Розраховуємо тривалість у мілісекундах
         const durationMs = new Date(endTime) - new Date(startTime);
         const durationHrs = durationMs / 3600000;
-
-        // Зберігаємо сесію лише якщо вона тривала не менше 1 хвилини (60 000 мс)
-        if (durationMs >= 60000) {
-          const id = Date.now().toString();
-          const newRecord = {
-            id,
-            startTime,
-            endTime,
-            duration: parseFloat(durationHrs.toFixed(4)),
-            synced: false
-          };
-
-          sleepData.unshift(newRecord);
-          localStorage.setItem('sleep_records', JSON.stringify(sleepData));
-
-          if (!pendingInserts.includes(id)) pendingInserts.push(id);
-          localStorage.setItem('pending_inserts', JSON.stringify(pendingInserts));
-          updateSyncIndicator();
-        }
 
         activeSleepStart = null;
         localStorage.removeItem('active_sleep_start');
         checkActiveSleepState();
 
-        fullSync();
+        if (durationMs >= 60000) {
+          tempSleepRecord = {
+            startTime,
+            endTime,
+            duration: parseFloat(durationHrs.toFixed(4))
+          };
+          showQualityRatingOverlay();
+        } else {
+          fullSync();
+        }
       }
+    }
+
+    // ─── GESTURAL MONOLITHIC PILLAR ENGINE ────────────────────────────────────
+    function showQualityRatingOverlay() {
+      document.getElementById('rating-overlay').classList.add('active');
+      startPillarAnimation();
+    }
+
+    function resizePillarCanvas() {
+      pillarCanvas.width  = pillarCanvas.parentElement.clientWidth  * window.devicePixelRatio;
+      pillarCanvas.height = pillarCanvas.parentElement.clientHeight * window.devicePixelRatio;
+      pillarCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+
+    function startPillarAnimation() {
+      resizePillarCanvas();
+      ratingProgress = 0.5; // Default starts halfway
+      currentProgress = 0.5;
+
+      function loop() {
+        if (!document.getElementById('rating-overlay').classList.contains('active')) return;
+        drawPillarCurve();
+        pillarAnimId = requestAnimationFrame(loop);
+      }
+      loop();
+    }
+
+    function drawPillarCurve() {
+      const width = pillarCanvas.width / window.devicePixelRatio;
+      const height = pillarCanvas.height / window.devicePixelRatio;
+      
+      pillarCtx.clearRect(0, 0, width, height);
+
+      const centerX = width / 2;
+      const lineTop = 80;
+      const lineBottom = height - 80;
+      const totalLength = lineBottom - lineTop;
+
+      // Smooth lerp interpolation for organic feeling
+      currentProgress += (ratingProgress - currentProgress) * 0.16;
+
+      const fillY = lineBottom - (currentProgress * totalLength);
+
+      // 1. Background thin guiding line (nearly invisible)
+      pillarCtx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      pillarCtx.lineWidth = 1;
+      pillarCtx.beginPath();
+      pillarCtx.moveTo(centerX, lineBottom);
+      pillarCtx.lineTo(centerX, lineTop);
+      pillarCtx.stroke();
+
+      // 2. Continuous brightness scaling (from 0.15 to 1.0 opacity)
+      const opacity = 0.15 + currentProgress * 0.85;
+      
+      // Continuous glow scaling (from 0 to 25px blur)
+      const glowBlur = currentProgress * 25;
+      
+      pillarCtx.shadowBlur = glowBlur;
+      pillarCtx.shadowColor = '#ffffff';
+      pillarCtx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+      pillarCtx.lineWidth = 1.5 + currentProgress * 1.0; // Subtle thickness increase
+      
+      pillarCtx.beginPath();
+      pillarCtx.moveTo(centerX, lineBottom);
+      pillarCtx.lineTo(centerX, fillY);
+      pillarCtx.stroke();
+
+      // 3. Ambient glowing point at the top
+      pillarCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+      pillarCtx.beginPath();
+      const capRadius = 3 + currentProgress * 2;
+      pillarCtx.arc(centerX, fillY, capRadius, 0, Math.PI * 2);
+      pillarCtx.fill();
+
+      pillarCtx.shadowBlur = 0; // Reset
+    }
+
+    function initPillarEvents() {
+      const handleInput = (clientY) => {
+        const rect = pillarCanvas.getBoundingClientRect();
+        const y = clientY - rect.top;
+        const height = rect.height;
+        
+        const lineTop = 80;
+        const lineBottom = height - 80;
+        const totalLength = lineBottom - lineTop;
+
+        const clampedY = Math.max(lineTop, Math.min(lineBottom, y));
+        // Compute precise analog 0.0 to 1.0 progress
+        ratingProgress = (lineBottom - clampedY) / totalLength;
+      };
+
+      pillarCanvas.addEventListener('touchstart', e => {
+        isDraggingPillar = true;
+        handleInput(e.touches[0].clientY);
+      }, { passive: true });
+
+      pillarCanvas.addEventListener('touchmove', e => {
+        if (isDraggingPillar) {
+          handleInput(e.touches[0].clientY);
+        }
+      }, { passive: true });
+
+      // Automatically save and fade out on release
+      pillarCanvas.addEventListener('touchend', e => {
+        if (isDraggingPillar) {
+          isDraggingPillar = false;
+          // Map continuous ratingProgress to nearest 1-5 integer level for DB storage
+          const finalRating = Math.max(1, Math.min(5, Math.round(ratingProgress * 4) + 1));
+          saveSessionWithRating(finalRating);
+        }
+      });
+
+      pillarCanvas.addEventListener('mousedown', e => {
+        isDraggingPillar = true;
+        handleInput(e.clientY);
+        const onMouseMove = (ev) => {
+          if (isDraggingPillar) handleInput(ev.clientY);
+        };
+        const onMouseUp = () => {
+          if (isDraggingPillar) {
+            isDraggingPillar = false;
+            const finalRating = Math.max(1, Math.min(5, Math.round(ratingProgress * 4) + 1));
+            saveSessionWithRating(finalRating);
+          }
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    function saveSessionWithRating(rating) {
+      if (pillarAnimId) cancelAnimationFrame(pillarAnimId);
+      document.getElementById('rating-overlay').classList.remove('active');
+
+      if (tempSleepRecord) {
+        const id = Date.now().toString();
+        const newRecord = {
+          id,
+          startTime: tempSleepRecord.startTime,
+          endTime: tempSleepRecord.endTime,
+          duration: tempSleepRecord.duration,
+          rating: rating,
+          synced: false
+        };
+
+        sleepData.unshift(newRecord);
+        localStorage.setItem('sleep_records', JSON.stringify(sleepData));
+
+        if (!pendingInserts.includes(id)) pendingInserts.push(id);
+        localStorage.setItem('pending_inserts', JSON.stringify(pendingInserts));
+        updateSyncIndicator();
+      }
+
+      tempSleepRecord = null;
+      fullSync();
     }
 
     // ─── NAVIGATION ───────────────────────────────────────────────────────────
@@ -730,6 +952,7 @@
       document.body.classList.add('sleeping');
       document.getElementById('screen-home').classList.add('left');
       document.getElementById('screen-stats').classList.add('active');
+      currentWeekOffset = 0; 
       renderStatistics();
     }
 
@@ -737,6 +960,12 @@
       if (!activeSleepStart) document.body.classList.remove('sleeping');
       document.getElementById('screen-home').classList.remove('left');
       document.getElementById('screen-stats').classList.remove('active');
+    }
+
+    function navigateWeek(direction) {
+      currentWeekOffset += direction;
+      if (currentWeekOffset > 0) currentWeekOffset = 0; 
+      renderWeeklyChart();
     }
 
     // ─── DELETE ───────────────────────────────────────────────────────────────
@@ -768,12 +997,14 @@
         return;
       }
 
+      // Avg Duration
       const avgDuration = sleepData.reduce((a, c) => a + c.duration, 0) / sleepData.length;
       const avgH = Math.floor(avgDuration);
       const avgM = Math.round((avgDuration % 1) * 60);
       document.getElementById('stat-avg-duration').textContent =
         avgH > 0 ? `${avgH}h ${avgM}m` : `${avgM}m`;
 
+      // Avg Bedtime
       const totalMin = sleepData.reduce((acc, item) => {
         const s = new Date(item.startTime);
         const h = s.getHours(), m = s.getMinutes();
@@ -824,33 +1055,81 @@
       initSwipeGestures();
     }
 
+    function getWeekRange(offset) {
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const monOffset = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek) + (offset * 7);
+      
+      const monday = new Date(today);
+      monday.setDate(today.getDate() + monOffset);
+      monday.setHours(0,0,0,0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23,59,59,999);
+
+      return { monday, sunday };
+    }
+
     function renderWeeklyChart() {
       const container  = document.getElementById('chart-bars-container');
       container.innerHTML = '';
 
-      const today      = new Date();
-      const dayOfWeek  = today.getDay();
-      const monOffset  = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const { monday, sunday } = getWeekRange(currentWeekOffset);
       const daysLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
       const week = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date();
-        d.setDate(today.getDate() + monOffset + i);
-        return { dateString: d.toDateString(), label: daysLabels[i], duration: 0, isToday: d.toDateString() === today.toDateString() };
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return {
+          dateString: d.toDateString(),
+          label: daysLabels[i],
+          duration: 0,
+          ratingSum: 0,
+          ratingCount: 0,
+          isToday: d.toDateString() === new Date().toDateString()
+        };
       });
 
       sleepData.forEach(item => {
         const key = new Date(item.endTime).toDateString();
         const day = week.find(d => d.dateString === key);
-        if (day) day.duration += item.duration;
+        if (day) {
+          day.duration += item.duration;
+          if (item.rating !== undefined && item.rating !== null) {
+            day.ratingSum += item.rating;
+            day.ratingCount++;
+          }
+        }
       });
+
+      const fmtOpt = { day: 'numeric', month: 'short' };
+      const rangeText = currentWeekOffset === 0 
+        ? "This Week" 
+        : `${monday.toLocaleDateString('en-US', fmtOpt)} – ${sunday.toLocaleDateString('en-US', fmtOpt)}`;
+      document.getElementById('chart-week-range').textContent = rangeText;
+
+      const nextBtn = document.getElementById('chart-nav-next');
+      if (currentWeekOffset >= 0) nextBtn.classList.add('disabled');
+      else                        nextBtn.classList.remove('disabled');
 
       const maxH = 12;
       week.forEach(day => {
         const pct = Math.min((day.duration / maxH) * 100, 100);
+        
+        // OPACITY MAPPED TO SLEEP QUALITY
+        const avgRating = day.ratingCount > 0 ? (day.ratingSum / day.ratingCount) : null;
+        let opacity = 0.65; 
+        if (day.duration > 0 && avgRating !== null) {
+          opacity = 0.22 + ((avgRating - 1) / 4) * 0.78;
+        }
+
+        const isTodayGlow = (day.isToday || (avgRating && avgRating >= 4.2));
+        const barClass = isTodayGlow ? 'bar highlight' : 'bar';
+
         container.innerHTML += `
           <div class="bar-wrapper">
-            <div class="${day.isToday ? 'bar highlight' : 'bar'}" style="height: ${pct}%" title="${day.duration.toFixed(1)} hrs"></div>
+            <div class="${barClass}" style="height: ${pct}%; opacity: ${day.duration > 0 ? opacity : 0.1};" title="${day.duration.toFixed(1)} hrs"></div>
             <div class="bar-day">${day.label}</div>
           </div>
         `;
