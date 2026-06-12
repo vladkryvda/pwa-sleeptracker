@@ -255,15 +255,18 @@
     .chart-bars {
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
+      align-items: stretch; /* Змінено з flex-end на stretch */
       height: 140px;
       padding-bottom: 4px;
     }
+    
     .bar-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
       flex: 1;
+      height: 100%;             /* Додано для заповнення висоти батька */
+      justify-content: flex-end; /* Додано для притискання елементів до низу */
     }
     .bar {
       width: 14px;
