@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sleep Tracker</title>
   <link rel="manifest" href="manifest.json">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght=200;300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-color: #ffffff;
@@ -96,8 +96,39 @@
       justify-content: center;
       transition: opacity 0.2s;
     }
-    .nav-arrow-btn:active {
-      opacity: 0.5;
+    .nav-arrow-btn:active { opacity: 0.5; }
+
+    /* Sync indicator */
+    .sync-indicator {
+      position: absolute;
+      top: calc(24px + env(safe-area-inset-top));
+      left: 24px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #8e8e93;
+      transition: background 0.4s ease, box-shadow 0.4s ease;
+    }
+    .sync-indicator.syncing {
+      background: #ffd60a;
+      box-shadow: 0 0 6px rgba(255, 214, 10, 0.6);
+      animation: pulse 1s infinite;
+    }
+    .sync-indicator.synced {
+      background: #30d158;
+      box-shadow: 0 0 6px rgba(48, 209, 88, 0.5);
+    }
+    .sync-indicator.error {
+      background: #ff453a;
+      box-shadow: 0 0 6px rgba(255, 69, 58, 0.5);
+    }
+    .sync-indicator.offline {
+      background: #8e8e93;
+      box-shadow: none;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
     }
 
     .center-status {
@@ -145,9 +176,7 @@
       transition: opacity 0.4s ease;
     }
 
-    #screen-home.sleeping .sleep-timer-minimal {
-      opacity: 1;
-    }
+    #screen-home.sleeping .sleep-timer-minimal { opacity: 1; }
 
     /* --- STATS SCREEN --- */
     #screen-stats {
@@ -156,9 +185,7 @@
       background-color: #000000;
       color: #ffffff;
     }
-    #screen-stats.active {
-      transform: translateX(0);
-    }
+    #screen-stats.active { transform: translateX(0); }
 
     .back-arrow-btn {
       background: none;
@@ -174,11 +201,8 @@
       align-self: flex-start;
       margin-bottom: 20px;
     }
-    .back-arrow-btn:active {
-      opacity: 0.5;
-    }
+    .back-arrow-btn:active { opacity: 0.5; }
 
-    /* Liquid Glass Panels */
     .glass-panel {
       background: var(--glass-bg);
       backdrop-filter: blur(20px);
@@ -197,9 +221,7 @@
       margin-bottom: 20px;
     }
     
-    .summary-card {
-      padding: 16px;
-    }
+    .summary-card { padding: 16px; }
     .summary-label {
       font-size: 10px;
       font-weight: 600;
@@ -214,7 +236,6 @@
       letter-spacing: -0.02em;
     }
 
-    /* Weekly Chart */
     .chart-container {
       display: flex;
       flex-direction: column;
@@ -260,7 +281,6 @@
       font-weight: 500;
     }
 
-    /* Swipe-to-Delete History */
     .history-section-title {
       font-size: 10px;
       font-weight: 600;
@@ -275,14 +295,11 @@
       overflow-y: scroll;
       padding-right: 2px;
     }
-
-    .full-history-list::-webkit-scrollbar {
-      display: none;
-    }
+    .full-history-list::-webkit-scrollbar { display: none; }
 
     .swipe-container {
       position: relative;
-      overflow: hidden; /* Маскує червону кнопку поза контейнером */
+      overflow: hidden;
       margin-bottom: 12px;
       border-radius: 18px;
       height: 64px;
@@ -309,6 +326,18 @@
       transform: translateX(0px);
     }
 
+    /* Unsynced badge on history row */
+    .history-row.unsynced::after {
+      content: '';
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ffd60a;
+    }
+
     .delete-underlay {
       position: absolute;
       top: 0;
@@ -323,7 +352,6 @@
       color: #ffffff;
       z-index: 1;
       cursor: pointer;
-      /* За замовчуванням зміщена праворуч, щоб її не було видно за прозорою карткою */
       transform: translateX(74px);
     }
 
@@ -356,6 +384,9 @@
           <polyline points="12 5 19 12 12 19"></polyline>
         </svg>
       </button>
+
+      <!-- Маленька крапка: grey=offline, yellow=syncing, green=synced, red=error -->
+      <div id="sync-indicator" class="sync-indicator offline" title="Sync status"></div>
       
       <div id="status-label" class="center-status">Tap to sleep</div>
       
@@ -398,43 +429,169 @@
   </div>
 
   <script>
-    // Посилання на ваш розгорнутий Google Apps Script веб-додаток
+    // ─── CONFIG ───────────────────────────────────────────────────────────────
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwoUfsbCHVST8M1O5VLkRbhVIS4RqyPNi268Q3obQ5XG0UMu1j6hnXf-yepJv4NoFSWag/exec";
 
-    let sleepData = JSON.parse(localStorage.getItem('sleep_records')) || [];
-    let deletedQueue = JSON.parse(localStorage.getItem('sleep_deleted_queue')) || [];
-    let activeSleepStart = localStorage.getItem('active_sleep_start');
-    
-    let ecgCanvas = document.getElementById('ecg-canvas');
-    let ecgCtx = ecgCanvas.getContext('2d');
-    let ecgAnimationId = null;
-    let waveTimer = 0;
-    let timerInterval = null;
+    // ─── STATE ────────────────────────────────────────────────────────────────
+    let sleepData        = JSON.parse(localStorage.getItem('sleep_records'))      || [];
+    let pendingInserts   = JSON.parse(localStorage.getItem('pending_inserts'))    || []; // id-шники нових записів які ще не в хмарі
+    let pendingDeletes   = JSON.parse(localStorage.getItem('pending_deletes'))    || []; // id-шники видалених записів які ще треба видалити з хмари
+    let activeSleepStart = localStorage.getItem('active_sleep_start')             || null;
+    let isSyncing        = false;
 
-    let touchStartX = 0;
+    // ─── DOM REFS ─────────────────────────────────────────────────────────────
+    const ecgCanvas       = document.getElementById('ecg-canvas');
+    const ecgCtx          = ecgCanvas.getContext('2d');
+    const syncIndicator   = document.getElementById('sync-indicator');
+
+    let ecgAnimationId = null;
+    let waveTimer      = 0;
+    let timerInterval  = null;
+    let touchStartX    = 0;
     let activeSwipeRow = null;
 
+    // ─── INIT ─────────────────────────────────────────────────────────────────
     window.addEventListener('load', async () => {
       checkActiveSleepState();
-      // Спочатку завантажуємо актуальні резервні дані з таблиці (як iCloud),
-      // а потім виконуємо синхронізацію локальних змін
-      await loadDataFromBackup();
-      syncData();
+      updateSyncIndicator();
+      await fullSync();
       window.addEventListener('resize', resizeCanvas);
     });
 
-    window.addEventListener('online', syncData);
+    // При поверненні онлайн — одразу синхронізуємо
+    window.addEventListener('online', () => {
+      updateSyncIndicator();
+      fullSync();
+    });
 
+    window.addEventListener('offline', () => {
+      updateSyncIndicator();
+    });
+
+    // ─── SYNC INDICATOR ───────────────────────────────────────────────────────
+    function updateSyncIndicator(state) {
+      syncIndicator.className = 'sync-indicator';
+
+      if (state) {
+        syncIndicator.classList.add(state);
+        return;
+      }
+
+      if (!navigator.onLine) {
+        syncIndicator.classList.add('offline');
+      } else if (pendingInserts.length > 0 || pendingDeletes.length > 0) {
+        syncIndicator.classList.add('syncing');
+      } else {
+        syncIndicator.classList.add('synced');
+      }
+    }
+
+    // ─── FULL SYNC FLOW ───────────────────────────────────────────────────────
+    // Логіка:
+    //   1. Спочатку надсилаємо pending changes (insert/delete) до хмари
+    //   2. Потім завантажуємо актуальний стан хмари
+    //   3. Мержимо: хмара є основою, але pending inserts які ще не потрапили —
+    //      додаємо зверху (на випадок race condition)
+    async function fullSync() {
+      if (!navigator.onLine || isSyncing) return;
+      isSyncing = true;
+      updateSyncIndicator('syncing');
+
+      try {
+        // Крок 1: надіслати pending changes
+        await pushPendingChanges();
+
+        // Крок 2: завантажити актуальний стан з хмари і змержити
+        await pullFromCloud();
+
+        updateSyncIndicator('synced');
+      } catch (err) {
+        console.error('[Sync] Error:', err);
+        updateSyncIndicator('error');
+        // Через 3 секунди покажемо реальний стан (може є pending items)
+        setTimeout(updateSyncIndicator, 3000);
+      } finally {
+        isSyncing = false;
+      }
+    }
+
+    // Надсилаємо локальні зміни до Google Sheets
+    async function pushPendingChanges() {
+      if (pendingInserts.length === 0 && pendingDeletes.length === 0) return;
+
+      const inserts = sleepData.filter(r => pendingInserts.includes(r.id));
+      const deletes = [...pendingDeletes];
+
+      // mode: 'no-cors' означає що відповідь ми не отримаємо (opaque response),
+      // тому вважаємо успіхом сам факт відправки
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inserts, deletes })
+      });
+
+      // Очищаємо pending після успішної відправки
+      pendingInserts = [];
+      pendingDeletes = deletes.length > 0
+        ? pendingDeletes.filter(id => !deletes.includes(id))
+        : [];
+
+      localStorage.setItem('pending_inserts', JSON.stringify(pendingInserts));
+      localStorage.setItem('pending_deletes', JSON.stringify(pendingDeletes));
+    }
+
+    // Завантажуємо повний список з хмари і мержимо з локальним станом
+    async function pullFromCloud() {
+      const response = await fetch(APPS_SCRIPT_URL + '?t=' + Date.now());
+      if (!response.ok) throw new Error('Cloud fetch failed: ' + response.status);
+
+      const cloudData = await response.json();
+      if (!Array.isArray(cloudData)) throw new Error('Unexpected cloud response format');
+
+      // Будуємо Set вже видалених id (щоб не повертати видалені записи з хмари)
+      const deletedSet = new Set(pendingDeletes);
+
+      // Перетворюємо хмарні записи → локальний формат
+      const cloudMap = new Map();
+      cloudData.forEach(r => {
+        if (!deletedSet.has(r.id)) {
+          cloudMap.set(r.id, { ...r, synced: true });
+        }
+      });
+
+      // Додаємо pending inserts які ще не потрапили в хмару
+      // (можлива race condition: ми тільки-но відправили, але хмара ще не повернула)
+      sleepData.forEach(r => {
+        if (pendingInserts.includes(r.id) && !cloudMap.has(r.id)) {
+          cloudMap.set(r.id, { ...r, synced: false });
+        }
+      });
+
+      // Збираємо фінальний масив, сортуємо за датою (новіші — перші)
+      sleepData = Array.from(cloudMap.values())
+        .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+      localStorage.setItem('sleep_records', JSON.stringify(sleepData));
+
+      // Оновлюємо UI якщо stats відкриті
+      if (document.getElementById('screen-stats').classList.contains('active')) {
+        renderStatistics();
+      }
+    }
+
+    // ─── CANVAS ───────────────────────────────────────────────────────────────
     function resizeCanvas() {
       if (activeSleepStart) {
-        ecgCanvas.width = ecgCanvas.parentElement.clientWidth * window.devicePixelRatio;
+        ecgCanvas.width  = ecgCanvas.parentElement.clientWidth  * window.devicePixelRatio;
         ecgCanvas.height = ecgCanvas.parentElement.clientHeight * window.devicePixelRatio;
         ecgCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
       }
     }
 
+    // ─── SLEEP STATE ──────────────────────────────────────────────────────────
     function checkActiveSleepState() {
-      const homeScreen = document.getElementById('screen-home');
+      const homeScreen   = document.getElementById('screen-home');
       const ecgContainer = document.getElementById('ecg-container');
       
       if (activeSleepStart) {
@@ -459,8 +616,8 @@
       if (ecgAnimationId) cancelAnimationFrame(ecgAnimationId);
       waveTimer = Date.now();
 
-      const width = ecgCanvas.width / window.devicePixelRatio;
-      const height = ecgCanvas.height / window.devicePixelRatio;
+      const width    = ecgCanvas.width  / window.devicePixelRatio;
+      const height   = ecgCanvas.height / window.devicePixelRatio;
       const baseline = height / 2;
 
       function draw() {
@@ -468,49 +625,36 @@
 
         ecgCtx.clearRect(0, 0, width, height);
 
-        const now = Date.now();
-        const elapsed = (now - waveTimer) / 1000;
-        
-        const cycleDuration = 5.0; 
-        const totalCycle = cycleDuration * 2; 
-        const progress = (elapsed % totalCycle) / cycleDuration; 
+        const now          = Date.now();
+        const elapsed      = (now - waveTimer) / 1000;
+        const cycleDuration = 5.0;
+        const totalCycle   = cycleDuration * 2;
+        const progress     = (elapsed % totalCycle) / cycleDuration;
 
-        let startX = 0;
-        let endX = 0;
-
+        let startX, endX;
         if (progress <= 1) {
           startX = 0;
-          endX = width * progress;
+          endX   = width * progress;
         } else {
-          const eraseProgress = progress - 1; 
-          startX = width * eraseProgress;
-          endX = width;
+          startX = width * (progress - 1);
+          endX   = width;
         }
 
         ecgCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ecgCtx.lineWidth = 1.2; 
-        ecgCtx.shadowBlur = 4;
+        ecgCtx.lineWidth   = 1.2;
+        ecgCtx.shadowBlur  = 4;
         ecgCtx.shadowColor = 'rgba(255, 255, 255, 0.2)';
-        ecgCtx.lineJoin = 'round';
+        ecgCtx.lineJoin    = 'round';
         ecgCtx.beginPath();
 
-        let isDrawingStarted = false;
-
+        let started = false;
         for (let x = Math.round(startX); x <= Math.round(endX); x++) {
           const amplitude = 22 * Math.sin((x / width) * Math.PI);
-          const frequency = 0.04;
-          const phase = elapsed * 1.5; 
-          const y = baseline + Math.sin(x * frequency - phase) * amplitude;
-
-          if (!isDrawingStarted) {
-            ecgCtx.moveTo(x, y);
-            isDrawingStarted = true;
-          } else {
-            ecgCtx.lineTo(x, y);
-          }
+          const y = baseline + Math.sin(x * 0.04 - elapsed * 1.5) * amplitude;
+          if (!started) { ecgCtx.moveTo(x, y); started = true; }
+          else            ecgCtx.lineTo(x, y);
         }
         ecgCtx.stroke();
-
         ecgAnimationId = requestAnimationFrame(draw);
       }
 
@@ -518,38 +662,28 @@
     }
 
     function stopWaveAnimation() {
-      if (ecgAnimationId) {
-        cancelAnimationFrame(ecgAnimationId);
-        ecgAnimationId = null;
-      }
+      if (ecgAnimationId) { cancelAnimationFrame(ecgAnimationId); ecgAnimationId = null; }
     }
 
     function startTimer() {
       if (timerInterval) clearInterval(timerInterval);
-      
-      const timerDisplay = document.getElementById('sleep-timer-minimal');
+      const display = document.getElementById('sleep-timer-minimal');
       const update = () => {
-        const start = new Date(activeSleepStart);
-        const diff = new Date() - start;
-        const hrs = Math.floor(diff / 3600000);
-        const mins = Math.floor((diff % 3600000) / 60000);
-        const secs = Math.floor((diff % 60000) / 1000);
-        
-        timerDisplay.textContent = 
-          `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        const diff = new Date() - new Date(activeSleepStart);
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        display.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
       };
-      
       update();
       timerInterval = setInterval(update, 1000);
     }
 
     function stopTimer() {
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-      }
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
     }
 
+    // ─── TOGGLE SLEEP ─────────────────────────────────────────────────────────
     function handleScreenTap(event) {
       if (event.target.closest('#nav-to-stats-btn')) return;
       toggleSleep();
@@ -557,35 +691,45 @@
 
     function toggleSleep() {
       if (!activeSleepStart) {
+        // → починаємо сон
         activeSleepStart = new Date().toISOString();
         localStorage.setItem('active_sleep_start', activeSleepStart);
         checkActiveSleepState();
       } else {
-        const endTime = new Date().toISOString();
-        const startTime = activeSleepStart;
+        // → завершуємо сон
+        const endTime    = new Date().toISOString();
+        const startTime  = activeSleepStart;
         const durationHrs = (new Date(endTime) - new Date(startTime)) / 3600000;
-        
+
         if (durationHrs > 0) {
+          const id = Date.now().toString();
           const newRecord = {
-            id: Date.now().toString(),
-            startTime: startTime,
-            endTime: endTime,
+            id,
+            startTime,
+            endTime,
             duration: parseFloat(durationHrs.toFixed(4)),
             synced: false
           };
-          
+
           sleepData.unshift(newRecord);
           localStorage.setItem('sleep_records', JSON.stringify(sleepData));
+
+          // Додаємо до pending inserts
+          if (!pendingInserts.includes(id)) pendingInserts.push(id);
+          localStorage.setItem('pending_inserts', JSON.stringify(pendingInserts));
+          updateSyncIndicator();
         }
 
         activeSleepStart = null;
         localStorage.removeItem('active_sleep_start');
-        
         checkActiveSleepState();
-        syncData();
+
+        // Спробуємо синхронізувати
+        fullSync();
       }
     }
 
+    // ─── NAVIGATION ───────────────────────────────────────────────────────────
     function navigateToStats(event) {
       event.stopPropagation();
       document.body.classList.add('sleeping');
@@ -595,146 +739,91 @@
     }
 
     function navigateToHome() {
-      if (!activeSleepStart) {
-        document.body.classList.remove('sleeping');
-      }
+      if (!activeSleepStart) document.body.classList.remove('sleeping');
       document.getElementById('screen-home').classList.remove('left');
       document.getElementById('screen-stats').classList.remove('active');
     }
 
-    // --- SWIPE-TO-DELETE GESTURES (Синхронне насування червоного блоку) ---
-    function initSwipeGestures() {
-      const rows = document.querySelectorAll('.history-row');
-      rows.forEach(row => {
-        const underlay = row.parentElement.querySelector('.delete-underlay');
-
-        row.addEventListener('touchstart', (e) => {
-          touchStartX = e.touches[0].clientX;
-          
-          if (activeSwipeRow && activeSwipeRow !== row) {
-            const activeUnderlay = activeSwipeRow.parentElement.querySelector('.delete-underlay');
-            activeSwipeRow.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-            activeSwipeRow.style.transform = 'translateX(0px)';
-            if (activeUnderlay) {
-              activeUnderlay.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-              activeUnderlay.style.transform = 'translateX(74px)';
-            }
-          }
-        }, { passive: true });
-
-        row.addEventListener('touchmove', (e) => {
-          const currentX = e.touches[0].clientX;
-          const diffX = currentX - touchStartX;
-          
-          if (diffX < 0) {
-            row.style.transition = 'none'; 
-            if (underlay) underlay.style.transition = 'none';
-
-            const translate = Math.max(diffX, -85);
-            row.style.transform = `translateX(${translate}px)`;
-            
-            // Червона кнопка рухається паралельно зсуву картки
-            if (underlay) {
-              const underlayTranslate = Math.max(74 + translate, 0);
-              underlay.style.transform = `translateX(${underlayTranslate}px)`;
-            }
-          } else {
-            row.style.transform = 'translateX(0px)';
-            if (underlay) underlay.style.transform = 'translateX(74px)';
-          }
-        }, { passive: true });
-
-        row.addEventListener('touchend', (e) => {
-          const currentX = e.changedTouches[0].clientX;
-          const diffX = currentX - touchStartX;
-          
-          row.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-          if (underlay) underlay.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-          
-          if (diffX < -40) {
-            row.style.transform = 'translateX(-74px)';
-            if (underlay) underlay.style.transform = 'translateX(0px)';
-            activeSwipeRow = row;
-          } else {
-            row.style.transform = 'translateX(0px)';
-            if (underlay) underlay.style.transform = 'translateX(74px)';
-            activeSwipeRow = null;
-          }
-        });
-      });
-    }
-
+    // ─── DELETE ───────────────────────────────────────────────────────────────
     function deleteRecord(id) {
-      sleepData = sleepData.filter(record => record.id !== id);
+      sleepData = sleepData.filter(r => r.id !== id);
       localStorage.setItem('sleep_records', JSON.stringify(sleepData));
-      
-      if (!deletedQueue.includes(id)) {
-        deletedQueue.push(id);
-        localStorage.setItem('sleep_deleted_queue', JSON.stringify(deletedQueue));
+
+      // Якщо запис був pending insert — просто прибираємо його звідти,
+      // бо він ще не потрапив в хмару → нічого видаляти там не треба
+      if (pendingInserts.includes(id)) {
+        pendingInserts = pendingInserts.filter(i => i !== id);
+        localStorage.setItem('pending_inserts', JSON.stringify(pendingInserts));
+      } else {
+        // Запис вже в хмарі → додаємо до pending deletes
+        if (!pendingDeletes.includes(id)) pendingDeletes.push(id);
+        localStorage.setItem('pending_deletes', JSON.stringify(pendingDeletes));
       }
-      
+
+      updateSyncIndicator();
       renderStatistics();
-      syncData();
+      fullSync();
     }
 
+    // ─── RENDER STATISTICS ────────────────────────────────────────────────────
     function renderStatistics() {
       if (sleepData.length === 0) {
         document.getElementById('stat-avg-duration').textContent = '—';
-        document.getElementById('stat-avg-bedtime').textContent = '—';
+        document.getElementById('stat-avg-bedtime').textContent  = '—';
         renderWeeklyChart();
-        document.getElementById('full-history').innerHTML = '<div style="color:var(--text-muted); padding: 10px 0; font-size:14px;">No history yet</div>';
+        document.getElementById('full-history').innerHTML =
+          '<div style="color:var(--text-muted); padding: 10px 0; font-size:14px;">No history yet</div>';
         return;
       }
 
-      const totalDuration = sleepData.reduce((acc, curr) => acc + curr.duration, 0);
-      const avgDuration = totalDuration / sleepData.length;
-      const avgHrs = Math.floor(avgDuration);
-      const avgMins = Math.round((avgDuration % 1) * 60);
-      document.getElementById('stat-avg-duration').textContent = 
-        avgHrs > 0 ? `${avgHrs}h ${avgMins}m` : `${avgMins}m`;
+      // Avg duration
+      const avgDuration = sleepData.reduce((a, c) => a + c.duration, 0) / sleepData.length;
+      const avgH = Math.floor(avgDuration);
+      const avgM = Math.round((avgDuration % 1) * 60);
+      document.getElementById('stat-avg-duration').textContent =
+        avgH > 0 ? `${avgH}h ${avgM}m` : `${avgM}m`;
 
-      let totalMinutesFromNoon = 0;
-      sleepData.forEach(item => {
-        const start = new Date(item.startTime);
-        let hrs = start.getHours();
-        let mins = start.getMinutes();
-        let minutesFromNoon = (hrs >= 12) ? ((hrs - 12) * 60 + mins) : ((hrs + 12) * 60 + mins);
-        totalMinutesFromNoon += minutesFromNoon;
-      });
-      const avgMinutesFromNoon = totalMinutesFromNoon / sleepData.length;
-      let avgBedHrs = Math.floor(avgMinutesFromNoon / 60) + 12;
-      if (avgBedHrs >= 24) avgBedHrs -= 24;
-      const avgBedMins = Math.round(avgMinutesFromNoon % 60);
-      document.getElementById('stat-avg-bedtime').textContent = 
-        `${String(avgBedHrs).padStart(2, '0')}:${String(avgBedMins).padStart(2, '0')}`;
+      // Avg bedtime
+      const totalMin = sleepData.reduce((acc, item) => {
+        const s = new Date(item.startTime);
+        const h = s.getHours(), m = s.getMinutes();
+        return acc + (h >= 12 ? (h - 12) * 60 + m : (h + 12) * 60 + m);
+      }, 0);
+      let avgBedH = Math.floor(totalMin / sleepData.length / 60) + 12;
+      if (avgBedH >= 24) avgBedH -= 24;
+      const avgBedM = Math.round((totalMin / sleepData.length) % 60);
+      document.getElementById('stat-avg-bedtime').textContent =
+        `${String(avgBedH).padStart(2,'0')}:${String(avgBedM).padStart(2,'0')}`;
 
       renderWeeklyChart();
 
-      const fullHistoryContainer = document.getElementById('full-history');
-      fullHistoryContainer.innerHTML = '';
-      
-      sleepData.forEach(item => {
-        const start = new Date(item.startTime);
-        const end = new Date(item.endTime);
-        const dateStr = end.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
-        const formatTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        
-        const h = Math.floor(item.duration);
-        const m = Math.round((item.duration % 1) * 60);
-        const durationStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+      // History list
+      const container = document.getElementById('full-history');
+      container.innerHTML = '';
 
-        fullHistoryContainer.innerHTML += `
+      sleepData.forEach(item => {
+        const start     = new Date(item.startTime);
+        const end       = new Date(item.endTime);
+        const dateStr   = end.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+        const fmt       = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const h         = Math.floor(item.duration);
+        const m         = Math.round((item.duration % 1) * 60);
+        const durStr    = h > 0 ? `${h}h ${m}m` : `${m}m`;
+        const isUnsynced = !item.synced || pendingInserts.includes(item.id);
+        const unsyncedClass = isUnsynced ? ' unsynced' : '';
+
+        container.innerHTML += `
           <div class="swipe-container">
             <div class="delete-underlay" style="transform: translateX(74px);" onclick="deleteRecord('${item.id}')">
               <svg class="delete-icon" viewBox="0 0 24 24">
                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
               </svg>
             </div>
-            <div class="history-row" style="transform: translateX(0px);">
+            <div class="history-row${unsyncedClass}" style="transform: translateX(0px);">
               <div>
-                <div class="history-time">${durationStr}</div>
+                <div class="history-time">${durStr}</div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight:500;">
-                  ${formatTime(start)} – ${formatTime(end)}
+                  ${fmt(start)} – ${fmt(end)}
                 </div>
               </div>
               <span class="history-date">${dateStr}</span>
@@ -747,132 +836,85 @@
     }
 
     function renderWeeklyChart() {
-      const container = document.getElementById('chart-bars-container');
+      const container  = document.getElementById('chart-bars-container');
       container.innerHTML = '';
 
-      const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const today = new Date();
-      
-      let currentDay = today.getDay(); 
-      let mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-      
-      const currentWeekDays = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date();
-        d.setDate(today.getDate() + mondayOffset + i);
-        currentWeekDays.push({
-          dateString: d.toDateString(),
-          dayLabel: daysOfWeek[i],
-          duration: 0,
-          isToday: d.toDateString() === today.toDateString()
-        });
-      }
+      const today      = new Date();
+      const dayOfWeek  = today.getDay();
+      const monOffset  = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const daysLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
-      sleepData.forEach(item => {
-        const endDayStr = new Date(item.endTime).toDateString();
-        const foundDay = currentWeekDays.find(d => d.dateString === endDayStr);
-        if (foundDay) {
-          foundDay.duration += item.duration;
-        }
+      const week = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(today.getDate() + monOffset + i);
+        return { dateString: d.toDateString(), label: daysLabels[i], duration: 0, isToday: d.toDateString() === today.toDateString() };
       });
 
-      const maxTargetHours = 12;
+      sleepData.forEach(item => {
+        const key = new Date(item.endTime).toDateString();
+        const day = week.find(d => d.dateString === key);
+        if (day) day.duration += item.duration;
+      });
 
-      currentWeekDays.forEach(day => {
-        const percentage = Math.min((day.duration / maxTargetHours) * 100, 100);
-        const barClass = day.isToday ? 'bar highlight' : 'bar';
-        
+      const maxH = 12;
+      week.forEach(day => {
+        const pct = Math.min((day.duration / maxH) * 100, 100);
         container.innerHTML += `
           <div class="bar-wrapper">
-            <div class="${barClass}" style="height: ${percentage}%" title="${day.duration.toFixed(1)} hrs"></div>
-            <div class="bar-day">${day.dayLabel}</div>
+            <div class="${day.isToday ? 'bar highlight' : 'bar'}" style="height: ${pct}%" title="${day.duration.toFixed(1)} hrs"></div>
+            <div class="bar-day">${day.label}</div>
           </div>
         `;
       });
     }
 
-    // --- БЕКАП-ІМПОРТ З GOOGLE ТАБЛИЦІ (iCloud логіка) ---
-    async function loadDataFromBackup() {
-      if (!navigator.onLine || APPS_SCRIPT_URL.includes("ВАШ_ID_СКРИПТА")) {
-        return;
-      }
+    // ─── SWIPE TO DELETE ──────────────────────────────────────────────────────
+    function initSwipeGestures() {
+      document.querySelectorAll('.history-row').forEach(row => {
+        const underlay = row.parentElement.querySelector('.delete-underlay');
 
-      try {
-        const response = await fetch(APPS_SCRIPT_URL);
-        if (response.ok) {
-          const remoteData = await response.json();
-          if (Array.isArray(remoteData)) {
-            // Фільтруємо отримані дані хмари, виключаючи ті, які ми щойно локально видалили (але ще не синхронізували)
-            const filteredRemote = remoteData.filter(r => !deletedQueue.includes(r.id));
-            
-            // Отримуємо локальні унікальні записи, які ще не були надіслані до таблиці
-            const unsyncedLocals = sleepData.filter(r => !r.synced);
-            
-            // Перетворюємо дані з хмари на локальний формат зі статусом synced: true
-            const mergedData = filteredRemote.map(r => ({ ...r, synced: true }));
-            
-            // Повертаємо узагальнені несинхронізовані записи на початок списку
-            unsyncedLocals.forEach(localItem => {
-              if (!mergedData.some(remoteItem => remoteItem.id === localItem.id)) {
-                mergedData.unshift(localItem);
-              }
-            });
-
-            // Сортуємо записи за датою
-            mergedData.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
-
-            sleepData = mergedData;
-            localStorage.setItem('sleep_records', JSON.stringify(sleepData));
-            renderStatistics();
+        row.addEventListener('touchstart', e => {
+          touchStartX = e.touches[0].clientX;
+          if (activeSwipeRow && activeSwipeRow !== row) {
+            const prevUnderlay = activeSwipeRow.parentElement.querySelector('.delete-underlay');
+            activeSwipeRow.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+            activeSwipeRow.style.transform  = 'translateX(0px)';
+            if (prevUnderlay) {
+              prevUnderlay.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+              prevUnderlay.style.transform  = 'translateX(74px)';
+            }
           }
-        }
-      } catch (error) {
-        console.error("Помилка завантаження бекапу:", error);
-      }
-    }
+        }, { passive: true });
 
-    // --- ЕКСПОРТ ЛОКАЛЬНИХ ЗМІН У GOOGLE ТАБЛИЦЮ ---
-    async function syncData() {
-      if (!navigator.onLine || APPS_SCRIPT_URL.includes("AKfycbwoUfsbCHVST8M1O5VLkRbhVIS4RqyPNi268Q3obQ5XG0UMu1j6hnXf-yepJv4NoFSWag")) {
-        return;
-      }
-
-      const unsyncedInserts = sleepData.filter(r => !r.synced);
-      const unsyncedDeletes = [...deletedQueue];
-
-      if (unsyncedInserts.length === 0 && unsyncedDeletes.length === 0) return;
-
-      const payload = {
-        inserts: unsyncedInserts,
-        deletes: unsyncedDeletes
-      };
-
-      try {
-        await fetch(APPS_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors', 
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload)
-        });
-
-        // Позначаємо надіслані логи як синхронізовані
-        sleepData = sleepData.map(r => {
-          if (unsyncedInserts.some(un => un.id === r.id)) {
-            r.synced = true;
+        row.addEventListener('touchmove', e => {
+          const diff = e.touches[0].clientX - touchStartX;
+          if (diff < 0) {
+            row.style.transition     = 'none';
+            if (underlay) underlay.style.transition = 'none';
+            const t = Math.max(diff, -85);
+            row.style.transform      = `translateX(${t}px)`;
+            if (underlay) underlay.style.transform = `translateX(${Math.max(74 + t, 0)}px)`;
+          } else {
+            row.style.transform = 'translateX(0px)';
+            if (underlay) underlay.style.transform = 'translateX(74px)';
           }
-          return r;
+        }, { passive: true });
+
+        row.addEventListener('touchend', e => {
+          const diff = e.changedTouches[0].clientX - touchStartX;
+          row.style.transition     = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+          if (underlay) underlay.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+          if (diff < -40) {
+            row.style.transform      = 'translateX(-74px)';
+            if (underlay) underlay.style.transform = 'translateX(0px)';
+            activeSwipeRow = row;
+          } else {
+            row.style.transform      = 'translateX(0px)';
+            if (underlay) underlay.style.transform = 'translateX(74px)';
+            activeSwipeRow = null;
+          }
         });
-        localStorage.setItem('sleep_records', JSON.stringify(sleepData));
-
-        // Очищаємо чергу видалення у разі успіху
-        deletedQueue = deletedQueue.filter(id => !unsyncedDeletes.includes(id));
-        localStorage.setItem('sleep_deleted_queue', JSON.stringify(deletedQueue));
-
-      } catch (error) {
-        console.error("Sync error:", error);
-      }
+      });
     }
   </script>
 </body>
