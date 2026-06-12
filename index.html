@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -7,14 +7,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sleep Tracker</title>
   <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-color: #000000;
       --text-main: #ffffff;
       --text-muted: #8e8e93;
-      --accent-color: #ffffff;
       --card-bg: #1c1c1e;
-      --border-color: #2c2c2e;
+      --glass-bg: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-shine: rgba(255, 255, 255, 0.12);
     }
 
     * {
@@ -26,15 +28,14 @@
     }
 
     body {
-      background-color: var(--bg-color);
+      background-color: #000000;
       color: var(--text-main);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
       overflow: hidden;
       height: 100vh;
       height: 100dvh;
     }
 
-    /* Контейнер для екранів (SPA) */
     .app-container {
       position: relative;
       width: 100%;
@@ -51,194 +52,186 @@
       display: flex;
       flex-direction: column;
       padding: 24px 20px;
-      padding-top: calc(24px + env(safe-area-inset-top));
-      padding-bottom: calc(24px + env(safe-area-inset-bottom));
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      background-color: var(--bg-color);
+      padding-top: calc(30px + env(safe-area-inset-top));
+      padding-bottom: calc(30px + env(safe-area-inset-bottom));
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Анімація переходу */
+    /* --- HOME SCREEN --- */
     #screen-home {
       transform: translateX(0);
       z-index: 1;
+      background-color: #ffffff;
+      color: #000000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
+                  color 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    
     #screen-home.left {
       transform: translateX(-100%);
     }
 
+    #screen-home.sleeping {
+      background-color: #000000;
+      color: #ffffff;
+    }
+
+    .nav-arrow-btn {
+      position: absolute;
+      top: calc(24px + env(safe-area-inset-top));
+      right: 24px;
+      background: none;
+      border: none;
+      color: currentColor;
+      cursor: pointer;
+      padding: 8px;
+      z-index: 10;
+      outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s;
+    }
+    .nav-arrow-btn:active {
+      opacity: 0.5;
+    }
+
+    .center-status {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    #screen-home.sleeping .center-status {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Wave Canvas Wrapper */
+    .ecg-container {
+      width: 100%;
+      height: 120px;
+      margin-top: 20px;
+      display: none;
+      pointer-events: none;
+    }
+    .ecg-container canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Крихітний мінімалістичний таймер внизу по центру */
+    .sleep-timer-minimal {
+      position: absolute;
+      bottom: calc(30px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      color: rgba(255, 255, 255, 0.3); /* Тьмяний напівпрозорий білий */
+      font-variant-numeric: tabular-nums;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    #screen-home.sleeping .sleep-timer-minimal {
+      opacity: 1;
+    }
+
+    /* --- STATS SCREEN --- */
     #screen-stats {
       transform: translateX(100%);
       z-index: 2;
+      background-color: #000000;
     }
     #screen-stats.active {
       transform: translateX(0);
     }
 
-    /* Приховування стандартних скролбарів */
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-
-    /* --- Головний екран --- */
-    .header {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 20px;
-      letter-spacing: -0.5px;
-    }
-
-    .history-preview {
-      background: var(--card-bg);
-      border-radius: 16px;
-      padding: 16px;
-      cursor: pointer;
-      margin-bottom: auto;
-    }
-
-    .history-preview-title {
-      font-size: 13px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .history-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .history-row:last-child {
-      border-bottom: none;
-    }
-
-    .history-time {
-      font-size: 16px;
-      font-weight: 500;
-    }
-    .history-date {
-      font-size: 14px;
-      color: var(--text-muted);
-    }
-
-    /* Центр з кнопкою та таймером */
-    .timer-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      margin: auto 0;
-    }
-
-    .live-timer {
-      font-size: 48px;
-      font-weight: 300;
-      font-variant-numeric: tabular-nums;
-      margin-bottom: 30px;
-      min-height: 58px;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    .live-timer.visible {
-      opacity: 1;
-    }
-
-    .action-button {
-      width: 180px;
-      height: 180px;
-      border-radius: 50%;
-      border: 2px solid var(--accent-color);
-      background-color: transparent;
-      color: var(--text-main);
-      font-size: 20px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background-color 0.2s, transform 0.1s;
-      outline: none;
-    }
-    .action-button:active {
-      transform: scale(0.96);
-    }
-    .action-button.sleeping {
-      background-color: var(--accent-color);
-      color: var(--bg-color);
-    }
-
-    .sync-status {
-      font-size: 12px;
-      color: var(--text-muted);
-      text-align: center;
-      margin-top: auto;
-    }
-
-    /* --- Екран статистики --- */
-    .stats-header {
-      display: flex;
-      align-items: center;
-      margin-bottom: 24px;
-    }
-    .back-btn {
+    .back-arrow-btn {
       background: none;
       border: none;
-      color: var(--text-main);
-      font-size: 24px;
+      color: #ffffff;
       cursor: pointer;
-      margin-right: 16px;
+      padding: 8px;
       outline: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s;
+      align-self: flex-start;
+      margin-bottom: 20px;
+    }
+    .back-arrow-btn:active {
+      opacity: 0.5;
+    }
+
+    /* Liquid Glass Panels */
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 
+                  inset 0 1px 0 var(--glass-shine);
     }
 
     .stats-summary {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 12px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
+    
     .summary-card {
-      background: var(--card-bg);
-      padding: 14px;
-      border-radius: 12px;
+      padding: 16px;
     }
     .summary-label {
-      font-size: 12px;
+      font-size: 10px;
+      font-weight: 600;
       color: var(--text-muted);
-      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
     }
     .summary-val {
       font-size: 18px;
       font-weight: 600;
+      letter-spacing: -0.02em;
     }
 
-    /* Графік Screen Time */
+    /* Weekly Chart */
     .chart-container {
-      background: var(--card-bg);
-      border-radius: 16px;
-      padding: 16px;
       display: flex;
       flex-direction: column;
       margin-bottom: 20px;
     }
     .chart-title {
-      font-size: 14px;
+      font-size: 10px;
+      font-weight: 600;
       color: var(--text-muted);
-      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 20px;
     }
     .chart-bars {
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      height: 160px;
-      padding-bottom: 8px;
+      height: 140px;
+      padding-bottom: 4px;
     }
     .bar-wrapper {
       display: flex;
@@ -248,19 +241,31 @@
     }
     .bar {
       width: 14px;
-      background: #2c2c2e;
+      background: rgba(255, 255, 255, 0.1);
       border-radius: 7px;
-      height: 0%; /* Керується через JS */
-      transition: height 0.6s cubic-bezier(0.1, 0.8, 0.3, 1);
+      height: 0%;
+      transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative;
     }
     .bar.highlight {
-      background: var(--accent-color);
+      background: #ffffff;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
     }
     .bar-day {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-muted);
       margin-top: 8px;
+      font-weight: 500;
+    }
+
+    /* Swipe-to-Delete */
+    .history-section-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
     }
 
     .full-history-list {
@@ -268,11 +273,63 @@
       overflow-y: scroll;
       padding-right: 2px;
     }
-    .history-section-title {
-      font-size: 14px;
+
+    .swipe-container {
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 10px;
+      border-radius: 16px;
+      height: 64px;
+      background-color: transparent;
+    }
+
+    .history-row {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--card-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 2;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    .delete-underlay {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 74px;
+      height: 100%;
+      background-color: #ff3b30;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      z-index: 1;
+      cursor: pointer;
+    }
+
+    .delete-icon {
+      width: 22px;
+      height: 22px;
+      fill: #ffffff;
+    }
+
+    .history-time {
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    .history-date {
+      font-size: 13px;
       color: var(--text-muted);
-      margin-bottom: 12px;
-      margin-top: 8px;
     }
   </style>
 </head>
@@ -280,124 +337,183 @@
 
   <div class="app-container">
     
-    <!-- Головний екран -->
-    <section id="screen-home" class="screen">
-      <div class="header">Сон</div>
+    <!-- HOME SCREEN -->
+    <section id="screen-home" class="screen" onclick="handleScreenTap(event)">
+      <button id="nav-to-stats-btn" class="nav-arrow-btn" onclick="navigateToStats(event)">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </button>
       
-      <div class="history-preview" onclick="navigateToStats()">
-        <div class="history-preview-title">
-          <span>Останні записи</span>
-          <span>Детальніше →</span>
-        </div>
-        <div id="preview-list">
-          <!-- Записи рендеряться через JS -->
-        </div>
+      <div id="status-label" class="center-status">Tap to sleep</div>
+      
+      <!-- Animated Wave Container -->
+      <div id="ecg-container" class="ecg-container">
+        <canvas id="ecg-canvas"></canvas>
       </div>
 
-      <div class="timer-section">
-        <div id="timer-display" class="live-timer">00:00:00</div>
-        <button id="main-btn" class="action-button" onclick="toggleSleep()">ПОЧАТИ</button>
-      </div>
-
-      <div id="sync-indicator" class="sync-status">Завантаження...</div>
+      <!-- Крихітний таймер внизу -->
+      <div id="sleep-timer-minimal" class="sleep-timer-minimal">00:00:00</div>
     </section>
 
-    <!-- Екран статистики -->
+    <!-- STATS SCREEN -->
     <section id="screen-stats" class="screen">
-      <div class="stats-header">
-        <button class="back-btn" onclick="navigateToHome()">←</button>
-        <div class="header" style="margin-bottom: 0;">Аналітика</div>
-      </div>
+      <button class="back-arrow-btn" onclick="navigateToHome()">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </button>
 
       <div class="stats-summary">
-        <div class="summary-card">
-          <div class="summary-label">Сер. тривалість</div>
+        <div class="glass-panel summary-card">
+          <div class="summary-label">Avg. Sleep</div>
           <div id="stat-avg-duration" class="summary-val">—</div>
         </div>
-        <div class="summary-card">
-          <div class="summary-label">Сер. час сну</div>
+        <div class="glass-panel summary-card">
+          <div class="summary-label">Avg. Bedtime</div>
           <div id="stat-avg-bedtime" class="summary-val">—</div>
         </div>
       </div>
 
-      <div class="chart-container">
-        <div class="chart-title">Тривалість за останні 7 днів</div>
-        <div class="chart-bars" id="chart-bars-container">
-          <!-- 7 стовпчиків генеруються динамічно -->
-        </div>
+      <div class="glass-panel chart-container">
+        <div class="chart-title">Last 7 Days</div>
+        <div class="chart-bars" id="chart-bars-container"></div>
       </div>
 
-      <div class="history-section-title">Історія за весь час</div>
-      <div id="full-history" class="full-history-list no-scrollbar">
-        <!-- Повний список записів -->
-      </div>
+      <div class="history-section-title">All History</div>
+      <div id="full-history" class="full-history-list no-scrollbar"></div>
     </section>
 
   </div>
 
   <script>
-    // КОНФІГУРАЦІЯ: Сюди вставте URL вашого розгорнутого Google Apps Script
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyLdkhNo70k0LU7_wuhlcieF3iHhfmtK-JKmbn4DPKJXo3zgdtXYb5yqdBmZxxqd0u6hQ/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxfZCM0ROlTbs2cC55gFHUzi08lwlUr59YNbfnyiIOHyaXhwyGhrYkCGV-N3PbQDmnNxg/exec";
 
     let sleepData = JSON.parse(localStorage.getItem('sleep_records')) || [];
+    let deletedQueue = JSON.parse(localStorage.getItem('sleep_deleted_queue')) || [];
     let activeSleepStart = localStorage.getItem('active_sleep_start');
+    
+    // Canvas Wave variables
+    let ecgCanvas = document.getElementById('ecg-canvas');
+    let ecgCtx = ecgCanvas.getContext('2d');
+    let ecgAnimationId = null;
+    let waveTimer = 0;
     let timerInterval = null;
 
-    // Ініціалізація додатку
+    let touchStartX = 0;
+    let activeSwipeRow = null;
+
     window.addEventListener('load', () => {
-      updateSyncStatus();
-      renderHomeHistory();
       checkActiveSleepState();
-      syncData(); // спроба фонової синхронізації при старті
-
-      // Реєстрація Service Worker для офлайну
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js')
-          .catch(err => console.log('Service Worker не зареєстровано: ', err));
-      }
-    });
-
-    // Слідкуємо за відновленням мережі
-    window.addEventListener('online', () => {
-      updateSyncStatus();
       syncData();
+      window.addEventListener('resize', resizeCanvas);
     });
-    window.addEventListener('offline', updateSyncStatus);
 
-    function updateSyncStatus() {
-      const indicator = document.getElementById('sync-indicator');
-      if (!navigator.onLine) {
-        indicator.textContent = "Офлайн-режим. Дані зберігаються локально.";
-        return;
-      }
-      const unsyncedCount = sleepData.filter(r => !r.synced).length;
-      if (unsyncedCount > 0) {
-        indicator.textContent = `Несинхронізовано записів: ${unsyncedCount}. Синхронізація...`;
-      } else {
-        indicator.textContent = "Усі дані успішно синхронізовано з хмарою.";
+    window.addEventListener('online', syncData);
+
+    function resizeCanvas() {
+      if (activeSleepStart) {
+        ecgCanvas.width = ecgCanvas.parentElement.clientWidth * window.devicePixelRatio;
+        ecgCanvas.height = ecgCanvas.parentElement.clientHeight * window.devicePixelRatio;
+        ecgCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
       }
     }
 
     function checkActiveSleepState() {
-      const btn = document.getElementById('main-btn');
-      const timerDisplay = document.getElementById('timer-display');
+      const homeScreen = document.getElementById('screen-home');
+      const ecgContainer = document.getElementById('ecg-container');
       
       if (activeSleepStart) {
-        btn.textContent = "ПРОКИНУТИСЬ";
-        btn.classList.add('sleeping');
-        timerDisplay.classList.add('visible');
+        homeScreen.classList.add('sleeping');
+        ecgContainer.style.display = "block";
+        resizeCanvas();
+        startWaveAnimation();
         startTimer();
       } else {
-        btn.textContent = "ПОЧАТИ СН";
-        btn.classList.remove('sleeping');
-        timerDisplay.classList.remove('visible');
+        homeScreen.classList.remove('sleeping');
+        ecgContainer.style.display = "none";
+        stopWaveAnimation();
         stopTimer();
       }
     }
 
+    // --- СИНУСОЇДА З ЕФЕКТОМ МАЛЮВАННЯ ТА СТИРАННЯ ЗЛІВА НАПРАВО ---
+    function startWaveAnimation() {
+      if (ecgAnimationId) cancelAnimationFrame(ecgAnimationId);
+      waveTimer = Date.now();
+
+      const width = ecgCanvas.width / window.devicePixelRatio;
+      const height = ecgCanvas.height / window.devicePixelRatio;
+      const baseline = height / 2;
+
+      function draw() {
+        if (!activeSleepStart) return;
+
+        ecgCtx.clearRect(0, 0, width, height);
+
+        const now = Date.now();
+        const elapsed = (now - waveTimer) / 1000;
+        
+        const cycleDuration = 5.0; 
+        const totalCycle = cycleDuration * 2; 
+        const progress = (elapsed % totalCycle) / cycleDuration; 
+
+        let startX = 0;
+        let endX = 0;
+
+        if (progress <= 1) {
+          startX = 0;
+          endX = width * progress;
+        } else {
+          const eraseProgress = progress - 1; 
+          startX = width * eraseProgress;
+          endX = width;
+        }
+
+        ecgCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ecgCtx.lineWidth = 1.2; 
+        ecgCtx.shadowBlur = 4;
+        ecgCtx.shadowColor = 'rgba(255, 255, 255, 0.2)';
+        ecgCtx.lineJoin = 'round';
+        ecgCtx.beginPath();
+
+        let isDrawingStarted = false;
+
+        for (let x = Math.round(startX); x <= Math.round(endX); x++) {
+          const amplitude = 22 * Math.sin((x / width) * Math.PI);
+          const frequency = 0.04;
+          const phase = elapsed * 1.5; 
+          const y = baseline + Math.sin(x * frequency - phase) * amplitude;
+
+          if (!isDrawingStarted) {
+            ecgCtx.moveTo(x, y);
+            isDrawingStarted = true;
+          } else {
+            ecgCtx.lineTo(x, y);
+          }
+        }
+        ecgCtx.stroke();
+
+        ecgAnimationId = requestAnimationFrame(draw);
+      }
+
+      draw();
+    }
+
+    function stopWaveAnimation() {
+      if (ecgAnimationId) {
+        cancelAnimationFrame(ecgAnimationId);
+        ecgAnimationId = null;
+      }
+    }
+
+    // Тікання мінімалістичного таймера внизу
     function startTimer() {
       if (timerInterval) clearInterval(timerInterval);
       
+      const timerDisplay = document.getElementById('sleep-timer-minimal');
       const update = () => {
         const start = new Date(activeSleepStart);
         const diff = new Date() - start;
@@ -405,7 +521,7 @@
         const mins = Math.floor((diff % 3600000) / 60000);
         const secs = Math.floor((diff % 60000) / 1000);
         
-        document.getElementById('timer-display').textContent = 
+        timerDisplay.textContent = 
           `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
       };
       
@@ -420,26 +536,27 @@
       }
     }
 
+    function handleScreenTap(event) {
+      if (event.target.closest('#nav-to-stats-btn')) return;
+      toggleSleep();
+    }
+
     function toggleSleep() {
       if (!activeSleepStart) {
-        // Почати сон
         activeSleepStart = new Date().toISOString();
         localStorage.setItem('active_sleep_start', activeSleepStart);
         checkActiveSleepState();
       } else {
-        // Прокинутись
         const endTime = new Date().toISOString();
         const startTime = activeSleepStart;
-        
         const durationHrs = (new Date(endTime) - new Date(startTime)) / 3600000;
         
-        // Ігноруємо сесії коротші за 1 хвилину (запобігання випадковим клікам)
-        if (durationHrs * 60 >= 1) {
+        if (durationHrs > 0) {
           const newRecord = {
             id: Date.now().toString(),
             startTime: startTime,
             endTime: endTime,
-            duration: parseFloat(durationHrs.toFixed(2)),
+            duration: parseFloat(durationHrs.toFixed(4)),
             synced: false
           };
           
@@ -451,38 +568,12 @@
         localStorage.removeItem('active_sleep_start');
         
         checkActiveSleepState();
-        renderHomeHistory();
         syncData();
       }
     }
 
-    // Рендер короткої історії на першому екрані
-    function renderHomeHistory() {
-      const list = document.getElementById('preview-list');
-      list.innerHTML = '';
-      
-      const lastThree = sleepData.slice(0, 3);
-      if (lastThree.length === 0) {
-        list.innerHTML = '<div class="history-row" style="color:var(--text-muted)">Немає записів</div>';
-        return;
-      }
-
-      lastThree.forEach(item => {
-        const dateObj = new Date(item.endTime);
-        const dateStr = dateObj.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
-        const timeStr = `${Math.floor(item.duration)}г ${Math.round((item.duration % 1) * 60)}хв`;
-        
-        list.innerHTML += `
-          <div class="history-row">
-            <span class="history-time">${timeStr}</span>
-            <span class="history-date">ранком ${dateStr}</span>
-          </div>
-        `;
-      });
-    }
-
-    // Переходи між екранами
-    function navigateToStats() {
+    function navigateToStats(event) {
+      event.stopPropagation();
       document.getElementById('screen-home').classList.add('left');
       document.getElementById('screen-stats').classList.add('active');
       renderStatistics();
@@ -491,74 +582,140 @@
     function navigateToHome() {
       document.getElementById('screen-home').classList.remove('left');
       document.getElementById('screen-stats').classList.remove('active');
-      renderHomeHistory();
     }
 
-    // Розрахунок та візуалізація статистики
+    // --- SWIPE-TO-DELETE GESTURES ---
+    function initSwipeGestures() {
+      const rows = document.querySelectorAll('.history-row');
+      rows.forEach(row => {
+        row.addEventListener('touchstart', (e) => {
+          touchStartX = e.touches[0].clientX;
+          
+          if (activeSwipeRow && activeSwipeRow !== row) {
+            activeSwipeRow.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+            activeSwipeRow.style.transform = 'translateX(0px)';
+          }
+        }, { passive: true });
+
+        row.addEventListener('touchmove', (e) => {
+          const currentX = e.touches[0].clientX;
+          const diffX = currentX - touchStartX;
+          
+          if (diffX < 0) {
+            row.style.transition = 'none'; 
+            const translate = Math.max(diffX, -85);
+            row.style.transform = `translateX(${translate}px)`;
+          } else {
+            row.style.transform = 'translateX(0px)';
+          }
+        }, { passive: true });
+
+        row.addEventListener('touchend', (e) => {
+          const currentX = e.changedTouches[0].clientX;
+          const diffX = currentX - touchStartX;
+          
+          row.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+          
+          if (diffX < -40) {
+            row.style.transform = 'translateX(-74px)';
+            activeSwipeRow = row;
+          } else {
+            row.style.transform = 'translateX(0px)';
+            activeSwipeRow = null;
+          }
+        });
+      });
+    }
+
+    function deleteRecord(id) {
+      sleepData = sleepData.filter(record => record.id !== id);
+      localStorage.setItem('sleep_records', JSON.stringify(sleepData));
+      
+      if (!deletedQueue.includes(id)) {
+        deletedQueue.push(id);
+        localStorage.setItem('sleep_deleted_queue', JSON.stringify(deletedQueue));
+      }
+      
+      renderStatistics();
+      syncData();
+    }
+
     function renderStatistics() {
-      // 1. Загальні показники
       if (sleepData.length === 0) {
         document.getElementById('stat-avg-duration').textContent = '—';
         document.getElementById('stat-avg-bedtime').textContent = '—';
+        renderWeeklyChart();
+        document.getElementById('full-history').innerHTML = '<div style="color:var(--text-muted); padding: 10px 0; font-size:14px;">No history yet</div>';
         return;
       }
 
       const totalDuration = sleepData.reduce((acc, curr) => acc + curr.duration, 0);
       const avgDuration = totalDuration / sleepData.length;
+      const avgHrs = Math.floor(avgDuration);
+      const avgMins = Math.round((avgDuration % 1) * 60);
       document.getElementById('stat-avg-duration').textContent = 
-        `${Math.floor(avgDuration)}г ${Math.round((avgDuration % 1) * 60)}хв`;
+        avgHrs > 0 ? `${avgHrs}h ${avgMins}m` : `${avgMins}m`;
 
-      // Розрахунок середнього часу відходу до сну
       let totalMinutesFromNoon = 0;
       sleepData.forEach(item => {
         const start = new Date(item.startTime);
         let hrs = start.getHours();
         let mins = start.getMinutes();
-        // Рахуємо хвилини від 12:00 дня, щоб уникнути похибки переходу через опівніч
         let minutesFromNoon = (hrs >= 12) ? ((hrs - 12) * 60 + mins) : ((hrs + 12) * 60 + mins);
         totalMinutesFromNoon += minutesFromNoon;
       });
       const avgMinutesFromNoon = totalMinutesFromNoon / sleepData.length;
-      let avgHrs = Math.floor(avgMinutesFromNoon / 60) + 12;
-      if (avgHrs >= 24) avgHrs -= 24;
-      const avgMins = Math.round(avgMinutesFromNoon % 60);
+      let avgBedHrs = Math.floor(avgMinutesFromNoon / 60) + 12;
+      if (avgBedHrs >= 24) avgBedHrs -= 24;
+      const avgBedMins = Math.round(avgMinutesFromNoon % 60);
       document.getElementById('stat-avg-bedtime').textContent = 
-        `${String(avgHrs).padStart(2, '0')}:${String(avgMins).padStart(2, '0')}`;
+        `${String(avgBedHrs).padStart(2, '0')}:${String(avgBedMins).padStart(2, '0')}`;
 
-      // 2. Рендеринг графіка (Останні 7 днів)
       renderWeeklyChart();
 
-      // 3. Повна історія
       const fullHistoryContainer = document.getElementById('full-history');
       fullHistoryContainer.innerHTML = '';
+      
       sleepData.forEach(item => {
         const start = new Date(item.startTime);
         const end = new Date(item.endTime);
-        const dateStr = end.toLocaleDateString('uk-UA', { weekday: 'short', day: 'numeric', month: 'short' });
+        const dateStr = end.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
         const formatTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         
+        const h = Math.floor(item.duration);
+        const m = Math.round((item.duration % 1) * 60);
+        const durationStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+
         fullHistoryContainer.innerHTML += `
-          <div class="history-row" style="padding: 12px 0;">
-            <div>
-              <div class="history-time">${Math.floor(item.duration)}г ${Math.round((item.duration % 1) * 60)}хв</div>
-              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-                ${formatTime(start)} – ${formatTime(end)}
-              </div>
+          <div class="swipe-container">
+            <div class="delete-underlay" onclick="deleteRecord('${item.id}')">
+              <svg class="delete-icon" viewBox="0 0 24 24">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
             </div>
-            <span class="history-date">${dateStr}</span>
+            <div class="history-row">
+              <div>
+                <div class="history-time">${durationStr}</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight:500;">
+                  ${formatTime(start)} – ${formatTime(end)}
+                </div>
+              </div>
+              <span class="history-date">${dateStr}</span>
+            </div>
           </div>
         `;
       });
+
+      initSwipeGestures();
     }
 
     function renderWeeklyChart() {
       const container = document.getElementById('chart-bars-container');
       container.innerHTML = '';
 
-      const daysOfWeek = ['Нд', 'Пн', 'Вв', 'Ср', 'Чт', 'Пт', 'Сб'];
+      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const today = new Date();
       
-      // Створюємо масив останніх 7 днів
       const last7Days = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
@@ -571,16 +728,14 @@
         });
       }
 
-      // Наповнюємо даними сну (по даті закінчення)
       sleepData.forEach(item => {
         const endDayStr = new Date(item.endTime).toDateString();
         const foundDay = last7Days.find(d => d.dateString === endDayStr);
         if (foundDay) {
-          foundDay.duration += item.duration; // сумуємо, якщо лягали кілька разів за добу
+          foundDay.duration += item.duration;
         }
       });
 
-      // Максимальна висота для масштабування графіка (нехай 12 годин — це 100%)
       const maxTargetHours = 12;
 
       last7Days.forEach(day => {
@@ -589,51 +744,51 @@
         
         container.innerHTML += `
           <div class="bar-wrapper">
-            <div class="${barClass}" style="height: ${percentage}%" title="${day.duration.toFixed(1)} год."></div>
+            <div class="${barClass}" style="height: ${percentage}%" title="${day.duration.toFixed(1)} hrs"></div>
             <div class="bar-day">${day.dayLabel}</div>
           </div>
         `;
       });
     }
 
-    // Фонова синхронізація через POST запит до Google Apps Script
     async function syncData() {
-      if (!navigator.onLine || APPS_SCRIPT_URL.includes("ВАШ_ID_СКРИПТА")) {
-        updateSyncStatus();
+      if (!navigator.onLine || APPS_SCRIPT_URL.includes("AKfycbxfZCM0ROlTbs2cC55gFHUzi08lwlUr59YNbfnyiIOHyaXhwyGhrYkCGV-N3PbQDmnNxg")) {
         return;
       }
 
-      const unsyncedRecords = sleepData.filter(r => !r.synced);
-      if (unsyncedRecords.length === 0) {
-        updateSyncStatus();
-        return;
-      }
+      const unsyncedInserts = sleepData.filter(r => !r.synced);
+      const unsyncedDeletes = [...deletedQueue];
+
+      if (unsyncedInserts.length === 0 && unsyncedDeletes.length === 0) return;
+
+      const payload = {
+        inserts: unsyncedInserts,
+        deletes: unsyncedDeletes
+      };
 
       try {
-        const response = await fetch(APPS_SCRIPT_URL, {
+        await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
-          mode: 'cors',
+          mode: 'no-cors', 
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(unsyncedRecords)
+          body: JSON.stringify(payload)
         });
 
-        const result = await response.json();
-        if (result.status === "success") {
-          // Відмічаємо синхронізовані записи
-          sleepData = sleepData.map(r => {
-            if (unsyncedRecords.some(un => un.id === r.id)) {
-              r.synced = true;
-            }
-            return r;
-          });
-          localStorage.setItem('sleep_records', JSON.stringify(sleepData));
-          updateSyncStatus();
-        }
+        sleepData = sleepData.map(r => {
+          if (unsyncedInserts.some(un => un.id === r.id)) {
+            r.synced = true;
+          }
+          return r;
+        });
+        localStorage.setItem('sleep_records', JSON.stringify(sleepData));
+
+        deletedQueue = deletedQueue.filter(id => !unsyncedDeletes.includes(id));
+        localStorage.setItem('sleep_deleted_queue', JSON.stringify(deletedQueue));
+
       } catch (error) {
-        console.error("Помилка синхронізації:", error);
-        updateSyncStatus();
+        console.error("Sync error:", error);
       }
     }
   </script>
