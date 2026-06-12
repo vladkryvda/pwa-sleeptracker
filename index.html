@@ -11,8 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght=200;300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-color: #ffffff;
-      --text-main: #000000;
+      --bg-color: #000000;
+      --text-main: #ffffff;
       --text-muted: #8e8e93;
       --card-bg: #1c1c1e;
       --glass-bg: rgba(255, 255, 255, 0.03);
@@ -29,14 +29,12 @@
     }
 
     html, body {
-      background-color: #ffffff;
-      color: #000000;
+      background-color: #000000;
+      color: #ffffff;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
       overflow: hidden;
       height: 100%;
       width: 100%;
-      transition: background-color 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
-                  color 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     body.sleeping {
@@ -49,8 +47,10 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
+      background-color: #000000;
     }
 
+    /* Монолітний екран без нижніх відступів-футерів */
     .screen {
       position: absolute;
       top: 0;
@@ -61,7 +61,8 @@
       flex-direction: column;
       padding: 24px 20px;
       padding-top: calc(30px + env(safe-area-inset-top));
-      padding-bottom: calc(30px + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
+      background-color: #000000;
       transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -69,7 +70,6 @@
     #screen-home {
       transform: translateX(0);
       z-index: 1;
-      background-color: transparent;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -183,8 +183,6 @@
     #screen-stats {
       transform: translateX(100%);
       z-index: 2;
-      background-color: #000000;
-      color: #ffffff;
     }
     #screen-stats.active { transform: translateX(0); }
 
@@ -319,10 +317,14 @@
       margin-bottom: 12px;
     }
 
+    /* АМБІЄНТНЕ ЗАТЕМНЕННЯ ІСТОРІЇ (linear-gradient mask) */
     .full-history-list {
       flex: 1;
       overflow-y: scroll;
       padding-right: 2px;
+      -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 95%);
+      mask-image: linear-gradient(to bottom, black 60%, transparent 95%);
+      padding-bottom: 40px; /* Запас для скролу */
     }
     .full-history-list::-webkit-scrollbar { display: none; }
 
@@ -401,7 +403,7 @@
       color: var(--text-muted);
     }
 
-    /* --- PURIFIED MONOLITHIC PILLAR OVERLAY (No texts, no buttons) --- */
+    /* --- ZEN RATING OVERLAY (No buttons, no texts, seamless black) --- */
     .rating-overlay {
       position: fixed;
       top: 0;
@@ -456,7 +458,7 @@
       <div id="sleep-timer-minimal" class="sleep-timer-minimal">00:00:00</div>
     </section>
 
-    <!-- STATS SCREEN -->
+    <!-- STATS SCREEN (Pure black seamless layout) -->
     <section id="screen-stats" class="screen">
       <button class="back-arrow-btn" onclick="navigateToHome()">
         <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -499,7 +501,7 @@
 
   </div>
 
-  <!-- MONOLITHIC PILLAR RATING OVERLAY (Purified) -->
+  <!-- ZEN RATING OVERLAY (Concentric Ripples Canvas Only) -->
   <div id="rating-overlay" class="rating-overlay">
     <div class="pillar-container">
       <canvas id="pillar-canvas"></canvas>
@@ -533,10 +535,18 @@
     let touchStartX    = 0;
     let activeSwipeRow = null;
 
-    // Pillar dynamic states (Continuous progress)
-    let ratingProgress = 0.5; // Стан пальця (від 0.0 до 1.0)
+    // Fluid continuous rating states
+    let ratingProgress = 0.5; // Стан пальця (0.0 to 1.0)
     let currentProgress = 0.5; // Анімований стан
     let isDraggingPillar = false;
+
+    const ratingLabels = {
+      1: "Restless",
+      2: "Light",
+      3: "Good",
+      4: "Deep",
+      5: "Restorative"
+    };
 
     // ─── INIT ─────────────────────────────────────────────────────────────────
     window.addEventListener('load', async () => {
@@ -788,7 +798,7 @@
       }
     }
 
-    // ─── GESTURAL MONOLITHIC PILLAR ENGINE ────────────────────────────────────
+    // ─── AMBIENT GRAVITY RIPPLES ENGINE (Concentric liquid rings) ─────────────
     function showQualityRatingOverlay() {
       document.getElementById('rating-overlay').classList.add('active');
       startPillarAnimation();
@@ -802,7 +812,7 @@
 
     function startPillarAnimation() {
       resizePillarCanvas();
-      ratingProgress = 0.5; // Default starts halfway
+      ratingProgress = 0.5; 
       currentProgress = 0.5;
 
       function loop() {
@@ -820,47 +830,52 @@
       pillarCtx.clearRect(0, 0, width, height);
 
       const centerX = width / 2;
-      const lineTop = 80;
-      const lineBottom = height - 80;
-      const totalLength = lineBottom - lineTop;
+      const centerY = height / 2;
 
-      // Smooth lerp interpolation for organic feeling
-      currentProgress += (ratingProgress - currentProgress) * 0.16;
+      // Smooth interpolation for fluid movement
+      currentProgress += (ratingProgress - currentProgress) * 0.12;
 
-      const fillY = lineBottom - (currentProgress * totalLength);
+      const time = Date.now();
 
-      // 1. Background thin guiding line (nearly invisible)
-      pillarCtx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-      pillarCtx.lineWidth = 1;
-      pillarCtx.beginPath();
-      pillarCtx.moveTo(centerX, lineBottom);
-      pillarCtx.lineTo(centerX, lineTop);
-      pillarCtx.stroke();
+      // Draw 5 concentric fluid geometric ripples
+      for (let i = 1; i <= 5; i++) {
+        // Radius scales with continuous progress
+        let radius = (i * 24) * currentProgress + 10;
+        
+        // Add delicate, hardware-like undulating vibration (sine offset)
+        const waveOffset = Math.sin(time * 0.0035 + i * 0.8) * (2.2 * currentProgress);
+        radius += waveOffset;
 
-      // 2. Continuous brightness scaling (from 0.15 to 1.0 opacity)
-      const opacity = 0.15 + currentProgress * 0.85;
+        // Opacity ranges from 0.05 to 0.8 based on input height
+        const baseOpacity = 0.06 + currentProgress * 0.74;
+        const ringOpacity = baseOpacity * (1 - (i - 1) * 0.15); // Fade outer rings
+        
+        // Glow amount scales with height
+        const glowBlur = currentProgress * 15;
+
+        pillarCtx.shadowBlur = glowBlur;
+        pillarCtx.shadowColor = '#ffffff';
+        pillarCtx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0.01, ringOpacity)})`;
+        pillarCtx.lineWidth = 0.6 + currentProgress * 0.4; // Extremely thin elegant lines
+
+        pillarCtx.beginPath();
+        pillarCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        pillarCtx.stroke();
+      }
+
+      // Reset shadows for drawing text
+      pillarCtx.shadowBlur = 0;
+
+      // Draw a single elegant focus word in the exact center of the ripples
+      const roundedRating = Math.max(1, Math.min(5, Math.round(currentProgress * 4) + 1));
+      const labelText = ratingLabels[roundedRating];
       
-      // Continuous glow scaling (from 0 to 25px blur)
-      const glowBlur = currentProgress * 25;
-      
-      pillarCtx.shadowBlur = glowBlur;
-      pillarCtx.shadowColor = '#ffffff';
-      pillarCtx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-      pillarCtx.lineWidth = 1.5 + currentProgress * 1.0; // Subtle thickness increase
-      
-      pillarCtx.beginPath();
-      pillarCtx.moveTo(centerX, lineBottom);
-      pillarCtx.lineTo(centerX, fillY);
-      pillarCtx.stroke();
-
-      // 3. Ambient glowing point at the top
-      pillarCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-      pillarCtx.beginPath();
-      const capRadius = 3 + currentProgress * 2;
-      pillarCtx.arc(centerX, fillY, capRadius, 0, Math.PI * 2);
-      pillarCtx.fill();
-
-      pillarCtx.shadowBlur = 0; // Reset
+      const textOpacity = 0.22 + currentProgress * 0.78;
+      pillarCtx.fillStyle = `rgba(255, 255, 255, ${textOpacity})`;
+      pillarCtx.font = '300 20px "Inter", -apple-system, sans-serif';
+      pillarCtx.textAlign = 'center';
+      pillarCtx.textBaseline = 'middle';
+      pillarCtx.fillText(labelText, centerX, centerY);
     }
 
     function initPillarEvents() {
@@ -869,12 +884,12 @@
         const y = clientY - rect.top;
         const height = rect.height;
         
-        const lineTop = 80;
-        const lineBottom = height - 80;
+        const lineTop = height * 0.22;
+        const lineBottom = height * 0.78;
         const totalLength = lineBottom - lineTop;
 
         const clampedY = Math.max(lineTop, Math.min(lineBottom, y));
-        // Compute precise analog 0.0 to 1.0 progress
+        // Precise continuous 0.0 to 1.0 progress calculation
         ratingProgress = (lineBottom - clampedY) / totalLength;
       };
 
@@ -889,11 +904,10 @@
         }
       }, { passive: true });
 
-      // Automatically save and fade out on release
+      // Save instantly on finger release
       pillarCanvas.addEventListener('touchend', e => {
         if (isDraggingPillar) {
           isDraggingPillar = false;
-          // Map continuous ratingProgress to nearest 1-5 integer level for DB storage
           const finalRating = Math.max(1, Math.min(5, Math.round(ratingProgress * 4) + 1));
           saveSessionWithRating(finalRating);
         }
@@ -903,7 +917,7 @@
         isDraggingPillar = true;
         handleInput(e.clientY);
         const onMouseMove = (ev) => {
-          if (isDraggingPillar) handleInput(ev.clientY);
+          if (isDraggingPillar) handleInput(ev.clientX || ev.clientY ? ev.clientY : ev.touches[0].clientY);
         };
         const onMouseUp = () => {
           if (isDraggingPillar) {
@@ -1117,7 +1131,7 @@
       week.forEach(day => {
         const pct = Math.min((day.duration / maxH) * 100, 100);
         
-        // OPACITY MAPPED TO SLEEP QUALITY
+        // OPACITY BRIGHTNESS SCALES BASED ON RATING
         const avgRating = day.ratingCount > 0 ? (day.ratingSum / day.ratingCount) : null;
         let opacity = 0.65; 
         if (day.duration > 0 && avgRating !== null) {
