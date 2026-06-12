@@ -7,11 +7,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Sleep Tracker</title>
   <link rel="manifest" href="manifest.json">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght=200;300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-color: #000000;
-      --text-main: #ffffff;
+      --bg-color: #ffffff;
+      --text-main: #000000;
       --text-muted: #8e8e93;
       --card-bg: #1c1c1e;
       --glass-bg: rgba(255, 255, 255, 0.03);
@@ -27,13 +27,20 @@
       user-select: none;
     }
 
-    body {
-      background-color: #000000;
-      color: var(--text-main);
+    html, body {
+      background-color: #ffffff;
+      color: #000000;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
       overflow: hidden;
-      height: 100vh;
-      height: 100dvh;
+      height: 100%;
+      width: 100%;
+      transition: background-color 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
+                  color 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body.sleeping {
+      background-color: #000000;
+      color: #ffffff;
     }
 
     .app-container {
@@ -61,24 +68,16 @@
     #screen-home {
       transform: translateX(0);
       z-index: 1;
-      background-color: #ffffff;
-      color: #000000;
+      background-color: transparent;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: background-color 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
-                  color 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
     
     #screen-home.left {
       transform: translateX(-100%);
-    }
-
-    #screen-home.sleeping {
-      background-color: #000000;
-      color: #ffffff;
     }
 
     .nav-arrow-btn {
@@ -115,11 +114,14 @@
       pointer-events: none;
     }
 
-    /* Wave Canvas Wrapper */
     .ecg-container {
+      position: absolute;
+      left: 0;
+      right: 0;
       width: 100%;
       height: 120px;
-      margin-top: 20px;
+      top: 50%;
+      transform: translateY(-50%);
       display: none;
       pointer-events: none;
     }
@@ -128,7 +130,6 @@
       height: 100%;
     }
 
-    /* Крихітний мінімалістичний таймер внизу по центру */
     .sleep-timer-minimal {
       position: absolute;
       bottom: calc(30px + env(safe-area-inset-bottom));
@@ -137,7 +138,7 @@
       font-size: 11px;
       font-weight: 400;
       letter-spacing: 0.15em;
-      color: rgba(255, 255, 255, 0.3); /* Тьмяний напівпрозорий білий */
+      color: rgba(255, 255, 255, 0.3);
       font-variant-numeric: tabular-nums;
       opacity: 0;
       pointer-events: none;
@@ -153,6 +154,7 @@
       transform: translateX(100%);
       z-index: 2;
       background-color: #000000;
+      color: #ffffff;
     }
     #screen-stats.active {
       transform: translateX(0);
@@ -258,7 +260,7 @@
       font-weight: 500;
     }
 
-    /* Swipe-to-Delete */
+    /* Swipe-to-Delete History List with Liquid Glass Theme */
     .history-section-title {
       font-size: 10px;
       font-weight: 600;
@@ -274,11 +276,16 @@
       padding-right: 2px;
     }
 
+    /* Приховати скроллбар у WebKit */
+    .full-history-list::-webkit-scrollbar {
+      display: none;
+    }
+
     .swipe-container {
       position: relative;
       overflow: hidden;
-      margin-bottom: 10px;
-      border-radius: 16px;
+      margin-bottom: 12px;
+      border-radius: 18px; /* Заокруглення як у решти елементів */
       height: 64px;
       background-color: transparent;
     }
@@ -289,15 +296,20 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: var(--card-bg);
+      /* Дизайн Glassmorphism аналогічний верхнім панелям */
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid var(--glass-border);
-      border-radius: 16px;
+      border-radius: 18px;
       padding: 12px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       z-index: 2;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      box-shadow: inset 0 1px 0 var(--glass-shine);
+      transform: translateX(0px);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .delete-underlay {
@@ -307,7 +319,7 @@
       width: 74px;
       height: 100%;
       background-color: #ff3b30;
-      border-radius: 16px;
+      border-radius: 18px; /* Заокруглені краї кнопки */
       display: flex;
       align-items: center;
       justify-content: center;
@@ -348,12 +360,10 @@
       
       <div id="status-label" class="center-status">Tap to sleep</div>
       
-      <!-- Animated Wave Container -->
       <div id="ecg-container" class="ecg-container">
         <canvas id="ecg-canvas"></canvas>
       </div>
 
-      <!-- Крихітний таймер внизу -->
       <div id="sleep-timer-minimal" class="sleep-timer-minimal">00:00:00</div>
     </section>
 
@@ -383,19 +393,19 @@
       </div>
 
       <div class="history-section-title">All History</div>
-      <div id="full-history" class="full-history-list no-scrollbar"></div>
+      <div id="full-history" class="full-history-list"></div>
     </section>
 
   </div>
 
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxfZCM0ROlTbs2cC55gFHUzi08lwlUr59YNbfnyiIOHyaXhwyGhrYkCGV-N3PbQDmnNxg/exec";
+    // URL вашого розгорнутого Google Apps Script
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwTst8u4J24m-wTAkA-B_3vxodIKkGsW8_41FzTjXoyfB00u1rUekfXzkSupkFHpZhOFA/exec";
 
     let sleepData = JSON.parse(localStorage.getItem('sleep_records')) || [];
     let deletedQueue = JSON.parse(localStorage.getItem('sleep_deleted_queue')) || [];
     let activeSleepStart = localStorage.getItem('active_sleep_start');
     
-    // Canvas Wave variables
     let ecgCanvas = document.getElementById('ecg-canvas');
     let ecgCtx = ecgCanvas.getContext('2d');
     let ecgAnimationId = null;
@@ -426,12 +436,16 @@
       const ecgContainer = document.getElementById('ecg-container');
       
       if (activeSleepStart) {
+        document.body.classList.add('sleeping');
         homeScreen.classList.add('sleeping');
         ecgContainer.style.display = "block";
         resizeCanvas();
         startWaveAnimation();
         startTimer();
       } else {
+        if (!document.getElementById('screen-stats').classList.contains('active')) {
+          document.body.classList.remove('sleeping');
+        }
         homeScreen.classList.remove('sleeping');
         ecgContainer.style.display = "none";
         stopWaveAnimation();
@@ -439,7 +453,6 @@
       }
     }
 
-    // --- СИНУСОЇДА З ЕФЕКТОМ МАЛЮВАННЯ ТА СТИРАННЯ ЗЛІВА НАПРАВО ---
     function startWaveAnimation() {
       if (ecgAnimationId) cancelAnimationFrame(ecgAnimationId);
       waveTimer = Date.now();
@@ -509,7 +522,6 @@
       }
     }
 
-    // Тікання мінімалістичного таймера внизу
     function startTimer() {
       if (timerInterval) clearInterval(timerInterval);
       
@@ -574,17 +586,21 @@
 
     function navigateToStats(event) {
       event.stopPropagation();
+      document.body.classList.add('sleeping');
       document.getElementById('screen-home').classList.add('left');
       document.getElementById('screen-stats').classList.add('active');
       renderStatistics();
     }
 
     function navigateToHome() {
+      if (!activeSleepStart) {
+        document.body.classList.remove('sleeping');
+      }
       document.getElementById('screen-home').classList.remove('left');
       document.getElementById('screen-stats').classList.remove('active');
     }
 
-    // --- SWIPE-TO-DELETE GESTURES ---
+    // --- SWIPE-TO-DELETE GESTURES (Змінено напрямок на Справа наліво) ---
     function initSwipeGestures() {
       const rows = document.querySelectorAll('.history-row');
       rows.forEach(row => {
@@ -601,9 +617,10 @@
           const currentX = e.touches[0].clientX;
           const diffX = currentX - touchStartX;
           
+          // Тільки рух вліво (diffX < 0)
           if (diffX < 0) {
             row.style.transition = 'none'; 
-            const translate = Math.max(diffX, -85);
+            const translate = Math.max(diffX, -85); // обмежуємо максимальний свайп
             row.style.transform = `translateX(${translate}px)`;
           } else {
             row.style.transform = 'translateX(0px)';
@@ -616,6 +633,7 @@
           
           row.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
           
+          // Поріг для фіксації смітника (-40px)
           if (diffX < -40) {
             row.style.transform = 'translateX(-74px)';
             activeSwipeRow = row;
@@ -689,6 +707,7 @@
         fullHistoryContainer.innerHTML += `
           <div class="swipe-container">
             <div class="delete-underlay" onclick="deleteRecord('${item.id}')">
+              <!-- Білий лаконічний смітник Apple Style -->
               <svg class="delete-icon" viewBox="0 0 24 24">
                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
               </svg>
@@ -713,16 +732,19 @@
       const container = document.getElementById('chart-bars-container');
       container.innerHTML = '';
 
-      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       const today = new Date();
       
-      const last7Days = [];
-      for (let i = 6; i >= 0; i--) {
+      let currentDay = today.getDay(); 
+      let mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+      
+      const currentWeekDays = [];
+      for (let i = 0; i < 7; i++) {
         const d = new Date();
-        d.setDate(today.getDate() - i);
-        last7Days.push({
+        d.setDate(today.getDate() + mondayOffset + i);
+        currentWeekDays.push({
           dateString: d.toDateString(),
-          dayLabel: daysOfWeek[d.getDay()],
+          dayLabel: daysOfWeek[i],
           duration: 0,
           isToday: d.toDateString() === today.toDateString()
         });
@@ -730,7 +752,7 @@
 
       sleepData.forEach(item => {
         const endDayStr = new Date(item.endTime).toDateString();
-        const foundDay = last7Days.find(d => d.dateString === endDayStr);
+        const foundDay = currentWeekDays.find(d => d.dateString === endDayStr);
         if (foundDay) {
           foundDay.duration += item.duration;
         }
@@ -738,7 +760,7 @@
 
       const maxTargetHours = 12;
 
-      last7Days.forEach(day => {
+      currentWeekDays.forEach(day => {
         const percentage = Math.min((day.duration / maxTargetHours) * 100, 100);
         const barClass = day.isToday ? 'bar highlight' : 'bar';
         
@@ -752,7 +774,7 @@
     }
 
     async function syncData() {
-      if (!navigator.onLine || APPS_SCRIPT_URL.includes("AKfycbxfZCM0ROlTbs2cC55gFHUzi08lwlUr59YNbfnyiIOHyaXhwyGhrYkCGV-N3PbQDmnNxg")) {
+      if (!navigator.onLine || APPS_SCRIPT_URL.includes("AKfycbwTst8u4J24m-wTAkA-B_3vxodIKkGsW8_41FzTjXoyfB00u1rUekfXzkSupkFHpZhOFA")) {
         return;
       }
 
@@ -776,6 +798,7 @@
           body: JSON.stringify(payload)
         });
 
+        // Маркуємо як синхронізовані лише ті, які успішно надіслано
         sleepData = sleepData.map(r => {
           if (unsyncedInserts.some(un => un.id === r.id)) {
             r.synced = true;
