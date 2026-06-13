@@ -403,7 +403,7 @@
       color: var(--text-muted);
     }
 
-    /* --- ZEN RATING OVERLAY (No buttons, no texts, seamless black) --- */
+    /* --- SLIDER RATING OVERLAY --- */
     .rating-overlay {
       position: fixed;
       top: 0;
@@ -412,25 +412,129 @@
       height: 100%;
       background: #000000;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       z-index: 100;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
     }
     .rating-overlay.active {
       opacity: 1;
       pointer-events: auto;
     }
-    .pillar-container {
-      width: 100%;
-      height: 100%;
-      position: relative;
+
+    .rating-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 70%);
+      filter: blur(40px);
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0;
+      transition: opacity 0.6s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    #pillar-canvas {
+    .rating-overlay.active .rating-glow {
+      opacity: 1;
+    }
+
+    /* Стиль заголовка повністю дублює ".center-status" */
+    .rating-title-smile {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #ffffff;
+      margin-bottom: 70px; /* Трохи більша відстань для композиції */
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .slider-wrapper {
+      position: relative;
+      width: 80%;
+      max-width: 280px;
+      height: 60px; /* Збільшена висота зони тачу для кращого UX */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    /* Стиль цифри повністю дублює ".sleep-timer-minimal" */
+    .rating-number-indicator {
+      position: absolute;
+      bottom: 45px; /* Знаходиться чітко над точкою */
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      color: rgba(255, 255, 255, 0.3);
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+    }
+
+    .slider-track-line {
+      position: relative;
+      width: 100%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.12); /* Дуже тонка і тьмяна лінія */
+    }
+
+    .slider-ticks {
+      position: absolute;
       width: 100%;
       height: 100%;
+      display: flex;
+      justify-content: space-between;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .tick {
+      width: 2px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      transition: background 0.25s ease, transform 0.25s ease;
+    }
+
+    .tick.active {
+      background: rgba(255, 255, 255, 0.7);
+      transform: scale(1.5);
+    }
+
+    .slider-thumb-point {
+      position: absolute;
+      top: 50%;
+      left: 50%; /* Початкове положення по центру */
+      transform: translate(-50%, -50%);
+      width: 8px; /* Маленька акуратна точка */
+      height: 8px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+    }
+
+    /* Створення невидимої більшої зони натискання для зручності на мобільних пристроях */
+    .slider-thumb-point::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 44px;
+      height: 44px;
     }
   </style>
 </head>
@@ -501,10 +605,22 @@
 
   </div>
 
-  <!-- ZEN RATING OVERLAY (Concentric Ripples Canvas Only) -->
+  <!-- SLIDER RATING OVERLAY -->
   <div id="rating-overlay" class="rating-overlay">
-    <div class="pillar-container">
-      <canvas id="pillar-canvas"></canvas>
+    <div id="rating-glow" class="rating-glow"></div>
+    <div class="rating-title-smile">smile!</div>
+    <div class="slider-wrapper">
+      <div id="rating-number" class="rating-number-indicator">3</div>
+      <div class="slider-track-line">
+        <div class="slider-ticks">
+          <span class="tick" data-val="1"></span>
+          <span class="tick" data-val="2"></span>
+          <span class="tick" data-val="3"></span>
+          <span class="tick" data-val="4"></span>
+          <span class="tick" data-val="5"></span>
+        </div>
+        <div id="slider-thumb" class="slider-thumb-point"></div>
+      </div>
     </div>
   </div>
 
@@ -525,38 +641,25 @@
     const ecgCanvas       = document.getElementById('ecg-canvas');
     const ecgCtx          = ecgCanvas.getContext('2d');
     const syncIndicator   = document.getElementById('sync-indicator');
-    const pillarCanvas    = document.getElementById('pillar-canvas');
-    const pillarCtx      = pillarCanvas.getContext('2d');
 
     let ecgAnimationId = null;
-    let pillarAnimId   = null;
     let waveTimer      = 0;
     let timerInterval  = null;
     let touchStartX    = 0;
     let activeSwipeRow = null;
 
-    // Fluid continuous rating states
-    let ratingProgress = 0.5; // Стан пальця (0.0 to 1.0)
-    let currentProgress = 0.5; // Анімований стан
-    let isDraggingPillar = false;
-
-    const ratingLabels = {
-      1: "Restless",
-      2: "Light",
-      3: "Good",
-      4: "Deep",
-      5: "Restorative"
-    };
+    // Slider rating variables
+    let currentRating = 3;
+    let isDraggingSlider = false;
 
     // ─── INIT ─────────────────────────────────────────────────────────────────
     window.addEventListener('load', async () => {
       checkActiveSleepState();
       updateSyncIndicator();
-      initPillarEvents();
+      initSliderEvents();
       await fullSync();
       window.addEventListener('resize', () => {
         resizeCanvas();
-        resizePillarCanvas();
       });
     });
 
@@ -798,143 +901,151 @@
       }
     }
 
-    // ─── AMBIENT GRAVITY RIPPLES ENGINE (Concentric liquid rings) ─────────────
+    // ─── SLIDER RATING INTERACTION ───────────────────────────────────────────
     function showQualityRatingOverlay() {
       document.getElementById('rating-overlay').classList.add('active');
-      startPillarAnimation();
+      updateSliderPosition(3, false);
     }
 
-    function resizePillarCanvas() {
-      pillarCanvas.width  = pillarCanvas.parentElement.clientWidth  * window.devicePixelRatio;
-      pillarCanvas.height = pillarCanvas.parentElement.clientHeight * window.devicePixelRatio;
-      pillarCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    }
+    function initSliderEvents() {
+      const wrapper = document.querySelector('.slider-wrapper');
+      const thumb = document.getElementById('slider-thumb');
+      const indicator = document.getElementById('rating-number');
+      const glow = document.getElementById('rating-glow');
+      const ticks = document.querySelectorAll('.tick');
 
-    function startPillarAnimation() {
-      resizePillarCanvas();
-      ratingProgress = 0.5; 
-      currentProgress = 0.5;
-
-      function loop() {
-        if (!document.getElementById('rating-overlay').classList.contains('active')) return;
-        drawPillarCurve();
-        pillarAnimId = requestAnimationFrame(loop);
-      }
-      loop();
-    }
-
-    function drawPillarCurve() {
-      const width = pillarCanvas.width / window.devicePixelRatio;
-      const height = pillarCanvas.height / window.devicePixelRatio;
-      
-      pillarCtx.clearRect(0, 0, width, height);
-
-      const centerX = width / 2;
-      const centerY = height / 2;
-
-      // Smooth interpolation for fluid movement
-      currentProgress += (ratingProgress - currentProgress) * 0.12;
-
-      const time = Date.now();
-
-      // Draw 5 concentric fluid geometric ripples
-      for (let i = 1; i <= 5; i++) {
-        // Radius scales with continuous progress
-        let radius = (i * 24) * currentProgress + 10;
+      const updateUI = (percentage, animate) => {
+        const rawRating = 1 + percentage * 4;
+        const roundedRating = Math.max(1, Math.min(5, Math.round(rawRating)));
         
-        // Add delicate, hardware-like undulating vibration (sine offset)
-        const waveOffset = Math.sin(time * 0.0035 + i * 0.8) * (2.2 * currentProgress);
-        radius += waveOffset;
+        indicator.textContent = roundedRating;
 
-        // Opacity ranges from 0.05 to 0.8 based on input height
-        const baseOpacity = 0.06 + currentProgress * 0.74;
-        const ringOpacity = baseOpacity * (1 - (i - 1) * 0.15); // Fade outer rings
-        
-        // Glow amount scales with height
-        const glowBlur = currentProgress * 15;
+        // Toggle active tick
+        ticks.forEach((tick, idx) => {
+          if (idx + 1 === roundedRating) {
+            tick.classList.add('active');
+          } else {
+            tick.classList.remove('active');
+          }
+        });
 
-        pillarCtx.shadowBlur = glowBlur;
-        pillarCtx.shadowColor = '#ffffff';
-        pillarCtx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0.01, ringOpacity)})`;
-        pillarCtx.lineWidth = 0.6 + currentProgress * 0.4; // Extremely thin elegant lines
+        // Toggle transitions
+        const transitionStyle = animate ? 'left 0.15s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+        thumb.style.transition = transitionStyle;
+        indicator.style.transition = transitionStyle;
 
-        pillarCtx.beginPath();
-        pillarCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        pillarCtx.stroke();
-      }
+        // Position thumb and indicator
+        const leftPercent = (percentage * 100) + '%';
+        thumb.style.left = leftPercent;
+        indicator.style.left = leftPercent;
 
-      // Reset shadows for drawing text
-      pillarCtx.shadowBlur = 0;
-
-      // Draw a single elegant focus word in the exact center of the ripples
-      const roundedRating = Math.max(1, Math.min(5, Math.round(currentProgress * 4) + 1));
-      const labelText = ratingLabels[roundedRating];
-      
-      const textOpacity = 0.22 + currentProgress * 0.78;
-      pillarCtx.fillStyle = `rgba(255, 255, 255, ${textOpacity})`;
-      pillarCtx.font = '300 20px "Inter", -apple-system, sans-serif';
-      pillarCtx.textAlign = 'center';
-      pillarCtx.textBaseline = 'middle';
-      pillarCtx.fillText(labelText, centerX, centerY);
-    }
-
-    function initPillarEvents() {
-      const handleInput = (clientY) => {
-        const rect = pillarCanvas.getBoundingClientRect();
-        const y = clientY - rect.top;
-        const height = rect.height;
-        
-        const lineTop = height * 0.22;
-        const lineBottom = height * 0.78;
-        const totalLength = lineBottom - lineTop;
-
-        const clampedY = Math.max(lineTop, Math.min(lineBottom, y));
-        // Precise continuous 0.0 to 1.0 progress calculation
-        ratingProgress = (lineBottom - clampedY) / totalLength;
+        // Glow parallax tracking
+        if (glow) {
+          const glowTransition = animate ? 'transform 0.15s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+          glow.style.transition = glowTransition;
+          const shiftX = (percentage - 0.5) * 50; // Max +/- 25px shift
+          glow.style.transform = `translate(calc(-50% + ${shiftX}px), -50%)`;
+        }
       };
 
-      pillarCanvas.addEventListener('touchstart', e => {
-        isDraggingPillar = true;
-        handleInput(e.touches[0].clientY);
+      const handleMove = (clientX) => {
+        const rect = wrapper.getBoundingClientRect();
+        const width = rect.width;
+        
+        const relativeX = Math.max(0, Math.min(clientX - rect.left, width));
+        const percentage = relativeX / width;
+        
+        const rawRating = 1 + percentage * 4;
+        currentRating = Math.max(1, Math.min(5, Math.round(rawRating)));
+
+        updateUI(percentage, false); // Drag is direct (no animation latency)
+      };
+
+      const handleEnd = () => {
+        if (isDraggingSlider) {
+          isDraggingSlider = false;
+          
+          // Snapping phase
+          const snappedPercent = ((currentRating - 1) / 4);
+          updateUI(snappedPercent, true);
+
+          // Delay actual save until snapping animation completes
+          setTimeout(() => {
+            saveSessionWithRating(currentRating);
+          }, 250);
+        }
+      };
+
+      // Touch events
+      wrapper.addEventListener('touchstart', (e) => {
+        isDraggingSlider = true;
+        handleMove(e.touches[0].clientX);
       }, { passive: true });
 
-      pillarCanvas.addEventListener('touchmove', e => {
-        if (isDraggingPillar) {
-          handleInput(e.touches[0].clientY);
+      wrapper.addEventListener('touchmove', (e) => {
+        if (isDraggingSlider) {
+          handleMove(e.touches[0].clientX);
         }
       }, { passive: true });
 
-      // Save instantly on finger release
-      pillarCanvas.addEventListener('touchend', e => {
-        if (isDraggingPillar) {
-          isDraggingPillar = false;
-          const finalRating = Math.max(1, Math.min(5, Math.round(ratingProgress * 4) + 1));
-          saveSessionWithRating(finalRating);
-        }
-      });
+      wrapper.addEventListener('touchend', handleEnd);
 
-      pillarCanvas.addEventListener('mousedown', e => {
-        isDraggingPillar = true;
-        handleInput(e.clientY);
+      // Mouse events
+      wrapper.addEventListener('mousedown', (e) => {
+        isDraggingSlider = true;
+        handleMove(e.clientX);
+
         const onMouseMove = (ev) => {
-          if (isDraggingPillar) handleInput(ev.clientX || ev.clientY ? ev.clientY : ev.touches[0].clientY);
+          if (isDraggingSlider) handleMove(ev.clientX);
         };
+
         const onMouseUp = () => {
-          if (isDraggingPillar) {
-            isDraggingPillar = false;
-            const finalRating = Math.max(1, Math.min(5, Math.round(ratingProgress * 4) + 1));
-            saveSessionWithRating(finalRating);
-          }
+          handleEnd();
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
         };
+
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
       });
     }
 
+    function updateSliderPosition(rating, animate) {
+      const thumb = document.getElementById('slider-thumb');
+      const indicator = document.getElementById('rating-number');
+      const glow = document.getElementById('rating-glow');
+      const ticks = document.querySelectorAll('.tick');
+
+      currentRating = rating;
+      indicator.textContent = rating;
+
+      ticks.forEach((tick, idx) => {
+        if (idx + 1 === rating) {
+          tick.classList.add('active');
+        } else {
+          tick.classList.remove('active');
+        }
+      });
+
+      const percentage = ((rating - 1) / 4);
+      const leftPercent = (percentage * 100) + '%';
+
+      const transitionStyle = animate ? 'left 0.15s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+      thumb.style.transition = transitionStyle;
+      indicator.style.transition = transitionStyle;
+
+      thumb.style.left = leftPercent;
+      indicator.style.left = leftPercent;
+
+      if (glow) {
+        const glowTransition = animate ? 'transform 0.15s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+        glow.style.transition = glowTransition;
+        const shiftX = (percentage - 0.5) * 50;
+        glow.style.transform = `translate(calc(-50% + ${shiftX}px), -50%)`;
+      }
+    }
+
     function saveSessionWithRating(rating) {
-      if (pillarAnimId) cancelAnimationFrame(pillarAnimId);
       document.getElementById('rating-overlay').classList.remove('active');
 
       if (tempSleepRecord) {
